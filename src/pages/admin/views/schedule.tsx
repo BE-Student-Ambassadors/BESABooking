@@ -301,7 +301,7 @@ export default function ScheduleView() {
 
           {/* Tours & Coverage */}
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border p-6">
+            <div className="bg-white rounded-xl shadow-sm border p-6 max-h-[68vh] overflow-y-auto">
               <h3 className="text-lg font-bold text-gray-900 mb-4">
                 Tours for {format(selectedDate, 'MMMM d, yyyy')}
               </h3>
