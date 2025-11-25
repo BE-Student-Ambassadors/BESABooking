@@ -440,28 +440,24 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const dayOfWeek = dayNames[selectedDate.getDay()];
 
-  // Check if date falls within any dateSpecificDays range
-  const isInDateRange = tour.dateSpecificDays?.some(range => {
-  const tourStart = new Date(range.startDate);
-  const tourEnd = new Date(range.endDate);
-  tourStart.setHours(0, 0, 0, 0);
-  tourEnd.setHours(23, 59, 59, 999);
-
-  const selectedStart = new Date(range.startDate);
-  const selectedEnd = new Date(range.endDate);
-  selectedStart.setHours(0, 0, 0, 0);
-  selectedEnd.setHours(23, 59, 59, 999);
-
-  // ✅ checks if selected range is fully inside the allowed tour range
-  return selectedStart >= tourStart && selectedEnd <= tourEnd;
-});
-
-
   // Check if the day of week has available hours in weeklyHours
   const hasWeeklyHours = tour.weeklyHours?.[dayOfWeek]?.length > 0;
 
-  // Date must either be in a date range OR have weekly hours for that day
-  if (!isInDateRange && !hasWeeklyHours) {
+  // Holidays / blocked days (dateSpecificDays now treated as unavailable ranges)
+  const blockedByDateSpecific = tour.dateSpecificDays?.some((range) => {
+    const blockStart = new Date(range.startDate + 'T00:00:00');
+    const blockEnd = new Date((range.endDate || range.startDate) + 'T23:59:59');
+    return selectedDate >= blockStart && selectedDate <= blockEnd;
+  });
+  if (blockedByDateSpecific) {
+    return {
+      available: false,
+      reason: "This date is unavailable (holiday or special closure).",
+    };
+  }
+
+  // Date must have weekly hours for that day
+  if (!hasWeeklyHours) {
     return { 
       available: false, 
       reason: "Unable to book on this day. Please select an available date." 
@@ -677,68 +673,66 @@ const handleSubmit = async () => {
   const renderSection1 = () => {
   const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
 
-  // Calculate min/max date based on dateSpecificDays range and 24-hour notice
+  // Calculate min/max date based on tour start/end and 24-hour notice.
+  // dateSpecificDays are treated as blocks/holidays (handled elsewhere), not the availability window.
   const getDateRange = () => {
     if (!selectedTourData) return { minDate: null, maxDate: null };
 
     const now = new Date();
     
     // Calculate 24-hour minimum from now
-    let minNoticeDate = new Date(now);
+    const minNoticeDate = new Date(now);
     minNoticeDate.setDate(minNoticeDate.getDate() + 1);
     minNoticeDate.setHours(0, 0, 0, 0);
 
-    // Get dateSpecificDays range if it exists
-    let rangeMinDate = null;
-    let rangeMaxDate = null;
+    const startDate = selectedTourData.startDate
+      ? new Date(selectedTourData.startDate + "T00:00:00")
+      : null;
+    const endDate = selectedTourData.endDate
+      ? new Date(selectedTourData.endDate + "T23:59:59")
+      : null;
 
-    if (selectedTourData.dateSpecificDays && selectedTourData.dateSpecificDays.length > 0) {
-      const dates = selectedTourData.dateSpecificDays.map(d => ({
-        start: new Date(d.startDate + 'T00:00:00'),
-        end: new Date(d.endDate + 'T00:00:00')
-      }));
+    // Use the later of: 24-hour notice or tour start date
+    const minDate = startDate && startDate > minNoticeDate ? startDate : minNoticeDate;
 
-      rangeMinDate = new Date(Math.min(...dates.map(d => d.start.getTime())));
-      rangeMaxDate = new Date(Math.max(...dates.map(d => d.end.getTime())));
-
-      console.log('dateSpecificDays range:', rangeMinDate.toDateString(), 'to', rangeMaxDate.toDateString());
-    }
-    
-
-    // Use the later of: 24-hour notice or range start date
-    let minDate = minNoticeDate;
-    if (rangeMinDate && rangeMinDate > minNoticeDate) {
-      minDate = rangeMinDate;
-    }
-
-    // Use range end date if it exists, otherwise calculate from maxNotice
-    let maxDate = rangeMaxDate;
+    // Use end date if it exists, otherwise calculate from maxNotice
+    let maxDate = endDate;
     if (!maxDate) {
       maxDate = new Date(now);
       switch (selectedTourData.maxNoticeUnit) {
-        case 'days':
+        case "days":
           maxDate.setDate(maxDate.getDate() + selectedTourData.maxNotice);
           break;
-        case 'weeks':
+        case "weeks":
           maxDate.setDate(maxDate.getDate() + (selectedTourData.maxNotice * 7));
           break;
-        case 'months':
+        case "months":
           maxDate.setMonth(maxDate.getMonth() + selectedTourData.maxNotice);
           break;
       }
     }
 
-    console.log('Final date range - min:', minDate?.toDateString(), 'max:', maxDate?.toDateString());
-
+    console.log("Final date range - min:", minDate?.toDateString(), "max:", maxDate?.toDateString());
 
     return { minDate, maxDate };
   };
 
   const { minDate, maxDate } = getDateRange();
 
+  const isBlockedDate = (dateStr: string, tour: Tour | undefined = selectedTourData) => {
+    if (!tour?.dateSpecificDays || tour.dateSpecificDays.length === 0) return false;
+    const target = new Date(dateStr + "T00:00:00");
+    return tour.dateSpecificDays.some((range) => {
+      const start = new Date(range.startDate + "T00:00:00");
+      const end = new Date((range.endDate || range.startDate) + "T23:59:59");
+      return target >= start && target <= end;
+    });
+  };
+
   // Helper to check if a date has any available time slots
   const hasAvailableTimeSlots = (dateStr: string): boolean => {
     if (!selectedTourData) return false;
+    if (isBlockedDate(dateStr)) return false;
     
     const now = new Date();
     const minDateTime = new Date(now);
