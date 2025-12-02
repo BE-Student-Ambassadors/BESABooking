@@ -26,15 +26,14 @@ dist-ssr
 *.sw?
 .env
 
-/frontend/password.txt
-/frontend//project/
+password.txt
 
 # /frontend/src/firebase.ts
-/frontend/src/credentials.json
+src/credentials.json
 
-/frontend/src/google92b6b100bdfc843f.html
+src/google92b6b100bdfc843f.html
 
-/frontend/src/besa-booking-469920-27ffc6b3226b.json
+src/besa-booking-469920-27ffc6b3226b.json
 
 
 /api/.venv/
