@@ -243,6 +243,24 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     console.log("Tour selected")
   };
 
+  const formatPhoneNumber = (rawValue: string) => {
+    const digits = rawValue.replace(/\D/g, "").slice(0, 10);
+    if (!digits) return "";
+
+    if (digits.length < 4) {
+      return `(${digits}`;
+    }
+    if (digits.length < 7) {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    }
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    updateBookingData("phone", formatted);
+  };
+
   // Calendar Display for Section 1
   const CustomCalendar: React.FC<CustomCalendarProps> = ({ selectedDate, onDateSelect, tourData, isDateAvailable }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -1250,7 +1268,7 @@ const renderSection3 = () => {
             <input
               type="tel"
               value={bookingData.phone}
-              onChange={(e) => updateBookingData("phone", e.target.value)}
+              onChange={handlePhoneChange}
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contactPhone ? "border-red-500" : "border-gray-300"
                 }`}
               placeholder="(555) 123-4567"
