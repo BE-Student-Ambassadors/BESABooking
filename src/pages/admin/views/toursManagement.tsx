@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, Calendar, Clock, MapPin, Users, Settings, FileText, Bell, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
-import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc, getDocs, writeBatch } from "firebase/firestore";
+import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
+
+{/* Create/Edit Tour Button adaptable for small screen */}
+{/* Allow to move order of tours (group first, etc) */}
+{/* Have it show the dates range instead of days in the front */}
+{/* Availabilty: allow for holiday dates */}
+
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -43,9 +49,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     },
     reminderEmails: [{ timing: 24, unit: 'hours' }],
     sessionInstructions: '',
-    published: false,
-    // NEW field: whether to apply holiday dates to all tours
-    applyToAllTours: false
+    published: false
   });
 
   const isEditing = !!editingTour;
@@ -130,52 +134,6 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
         return tour.location.trim() || tour.zoomLink.trim() || tour.autoGenerateZoom;
       default:
         return true;
-    }
-  };
-
-  // Utility: merge universalDates into existingDates without exact duplicates
-  const mergeDateOverrides = (existingDates: any[] = [], universalDates: any[] = []) => {
-    if (!universalDates || universalDates.length === 0) return existingDates || [];
-    const seen = new Set<string>();
-    const add = (d: any) => {
-      const key = JSON.stringify({
-        startDate: d.startDate || '',
-        endDate: d.endDate || '',
-        unavailable: !!d.unavailable,
-        // if you need to consider slots too, include them in the key
-      });
-      if (!seen.has(key)) {
-        seen.add(key);
-        merged.push(d);
-      }
-    };
-    const merged: any[] = [];
-    (existingDates || []).forEach(add);
-    (universalDates || []).forEach(add);
-    return merged;
-  };
-
-  // Apply the tour.dateSpecificBlockDays (universalDates) to every tour in Firestore
-  const applyUniversalDatesToAll = async (universalDates: any[]) => {
-    try {
-      if (!universalDates || universalDates.length === 0) return;
-      const toursRef = collection(db, "Tours");
-      const snapshot = await getDocs(toursRef);
-      if (snapshot.empty) return;
-
-      const batch = writeBatch(db);
-      snapshot.docs.forEach((d) => {
-        const docData = d.data() as any;
-        const existing = Array.isArray(docData.dateSpecificBlockDays) ? docData.dateSpecificBlockDays : [];
-        const merged = mergeDateOverrides(existing, universalDates);
-        const tourRef = doc(db, "Tours", d.id);
-        batch.update(tourRef, { dateSpecificBlockDays: merged });
-      });
-
-      await batch.commit();
-    } catch (err) {
-      console.error("Error applying universal dates to all tours:", err);
-      // we surface the error to console — optional: show alert to user
     }
   };
 
@@ -443,190 +401,160 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     </div>
 
     {/* Holidays & Special Events Block Off */}
-   <div className="border-t pt-4 2xl:pt-6">
-      <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 2xl:gap-0 mb-3 2xl:mb-4">
-        <div>
-          <h3 className="text-base 2xl:text-lg font-medium text-gray-900">Holidays & Special Events</h3>
-          <p className="text-xs 2xl:text-sm text-gray-500 mt-1">Block off specific dates or date ranges</p>
-        </div>
-        <div className="flex items-center space-x-3">
+    <div className="border-t pt-4 2xl:pt-6">
+  <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 2xl:gap-0 mb-3 2xl:mb-4">
+    <div>
+      <h3 className="text-base 2xl:text-lg font-medium text-gray-900">Holidays & Special Events</h3>
+      <p className="text-xs 2xl:text-sm text-gray-500 mt-1">Block off specific dates</p>
+    </div>
+    <button
+      type="button"
+      onClick={() => {
+        updateTour({
+          dateSpecificBlockDays: [
+            ...(tour.dateSpecificBlockDays || []),
+            { startDate: '', endDate: '', slots: [], unavailable: true }
+          ]
+        });
+      }}
+      className="text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center space-x-1 self-start"
+    >
+      <Plus className="h-4 w-4" />
+      <span className="text-sm">Add Date Override</span>
+    </button>
+  </div>
+
+  <div className="space-y-3 2xl:space-y-4">
+    {(!tour.dateSpecificBlockDays || tour.dateSpecificBlockDays.length === 0) && (
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+        <p className="text-sm text-gray-500">No date overrides set</p>
+      </div>
+    )}
+
+    {(tour.dateSpecificBlockDays || []).map((dateOverride, index) => (
+      <div key={index} className="border border-gray-200 rounded-lg p-3 2xl:p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+            <input
+              type="date"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              value={dateOverride.startDate}
+              onChange={(e) => {
+                const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                newDateSpecific[index] = { ...dateOverride, startDate: e.target.value };
+                updateTour({ dateSpecificBlockDays: newDateSpecific });
+              }}
+            />
+          </div>
           <button
             type="button"
             onClick={() => {
               updateTour({
-                dateSpecificBlockDays: [
-                  ...(tour.dateSpecificBlockDays || []),
-                  { startDate: '', endDate: '', slots: [], unavailable: true }
-                ]
+                dateSpecificBlockDays: (tour.dateSpecificBlockDays || []).filter((_, i) => i !== index)
               });
             }}
-            className="text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center space-x-1 self-start"
+            className="text-red-600 hover:bg-red-50 p-2 rounded-lg mt-6"
           >
-            <Plus className="h-4 w-4" />
-            <span className="text-sm">Add Date Override</span>
+            <X className="h-4 w-4" />
           </button>
+        </div>
 
-          {/* NEW: Apply to all tours toggle */}
-          <label className="flex items-center space-x-2 text-sm">
+        <div>
+          <label className="flex items-center space-x-2">
             <input
               type="checkbox"
-              checked={!!tour.applyToAllTours}
-              onChange={(e) => updateTour({ applyToAllTours: e.target.checked })}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={dateOverride.unavailable}
+              onChange={(e) => {
+                const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                newDateSpecific[index] = { 
+                  ...dateOverride, 
+                  unavailable: e.target.checked,
+                  slots: e.target.checked ? [] : dateOverride.slots
+                };
+                updateTour({ dateSpecificBlockDays: newDateSpecific });
+              }}
+              className="rounded border-gray-300 text-red-600 focus:ring-red-500"
             />
-            <span className="text-xs text-gray-600">Apply these dates to all tours</span>
+            <span className="text-sm text-gray-700">Mark as unavailable (holiday/closed)</span>
           </label>
         </div>
-      </div>
 
-      <div className="space-y-3 2xl:space-y-4">
-        {(!tour.dateSpecificBlockDays || tour.dateSpecificBlockDays.length === 0) && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
-            <p className="text-sm text-gray-500">No date overrides set</p>
-          </div>
-        )}
-
-        {(tour.dateSpecificBlockDays || []).map((dateOverride, index) => (
-          <div key={index} className="border border-gray-200 rounded-lg p-3 2xl:p-4 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    value={dateOverride.startDate}
-                    onChange={(e) => {
-                      const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                      newDateSpecific[index] = { ...dateOverride, startDate: e.target.value };
-                      updateTour({ dateSpecificBlockDays: newDateSpecific });
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date (Optional)</label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    value={dateOverride.endDate}
-                    min={dateOverride.startDate}
-                    onChange={(e) => {
-                      const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                      newDateSpecific[index] = { ...dateOverride, endDate: e.target.value };
-                      updateTour({ dateSpecificBlockDays: newDateSpecific });
-                    }}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Leave blank for single day</p>
-                </div>
-              </div>
+        {!dateOverride.unavailable && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">Custom Time Slots</label>
               <button
                 type="button"
                 onClick={() => {
-                  updateTour({
-                    dateSpecificBlockDays: (tour.dateSpecificBlockDays || []).filter((_, i) => i !== index)
-                  });
+                  const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                  newDateSpecific[index] = {
+                    ...dateOverride,
+                    slots: [...dateOverride.slots, { start: '09:00', end: '17:00' }]
+                  };
+                  updateTour({ dateSpecificBlockDays: newDateSpecific });
                 }}
-                className="text-red-600 hover:bg-red-50 p-2 rounded-lg mt-6"
+                className="text-blue-600 hover:bg-blue-50 p-1 rounded-lg"
               >
-                <X className="h-4 w-4" />
+                <Plus className="h-4 w-4" />
               </button>
             </div>
 
-            <div>
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={dateOverride.unavailable}
-                  onChange={(e) => {
-                    const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                    newDateSpecific[index] = { 
-                      ...dateOverride, 
-                      unavailable: e.target.checked,
-                      slots: e.target.checked ? [] : dateOverride.slots
-                    };
-                    updateTour({ dateSpecificBlockDays: newDateSpecific });
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <span className="text-sm text-gray-700">Mark as unavailable (holiday/closed)</span>
-              </label>
-            </div>
+            {dateOverride.slots.length === 0 && (
+              <p className="text-gray-500 text-xs mb-2">No custom slots (will use weekly hours)</p>
+            )}
 
-            {!dateOverride.unavailable && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Custom Time Slots</label>
+            <div className="space-y-2">
+              {dateOverride.slots.map((slot, slotIndex) => (
+                <div key={slotIndex} className="flex items-center space-x-2">
+                  <input
+                    type="time"
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                    value={slot.start}
+                    onChange={(e) => {
+                      const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                      const newSlots = [...dateOverride.slots];
+                      newSlots[slotIndex] = { ...slot, start: e.target.value };
+                      newDateSpecific[index] = { ...dateOverride, slots: newSlots };
+                      updateTour({ dateSpecificBlockDays: newDateSpecific });
+                    }}
+                  />
+                  <span className="text-gray-500 text-xs">to</span>
+                  <input
+                    type="time"
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                    value={slot.end}
+                    onChange={(e) => {
+                      const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                      const newSlots = [...dateOverride.slots];
+                      newSlots[slotIndex] = { ...slot, end: e.target.value };
+                      newDateSpecific[index] = { ...dateOverride, slots: newSlots };
+                      updateTour({ dateSpecificBlockDays: newDateSpecific });
+                    }}
+                  />
                   <button
                     type="button"
                     onClick={() => {
                       const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
                       newDateSpecific[index] = {
                         ...dateOverride,
-                        slots: [...(dateOverride.slots || []), { start: '09:00', end: '17:00' }]
+                        slots: dateOverride.slots.filter((_, i) => i !== slotIndex)
                       };
                       updateTour({ dateSpecificBlockDays: newDateSpecific });
                     }}
-                    className="text-blue-600 hover:bg-blue-50 p-1 rounded-lg"
+                    className="text-red-600 hover:bg-red-50 p-1 rounded-lg"
                   >
-                    <Plus className="h-4 w-4" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
-
-                {(!dateOverride.slots || dateOverride.slots.length === 0) && (
-                  <p className="text-gray-500 text-xs mb-2">No custom slots (will use weekly hours)</p>
-                )}
-
-                <div className="space-y-2">
-                  {(dateOverride.slots || []).map((slot, slotIndex) => (
-                    <div key={slotIndex} className="flex items-center space-x-2">
-                      <input
-                        type="time"
-                        className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
-                        value={slot.start}
-                        onChange={(e) => {
-                          const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                          const newSlots = [...(dateOverride.slots || [])];
-                          newSlots[slotIndex] = { ...slot, start: e.target.value };
-                          newDateSpecific[index] = { ...dateOverride, slots: newSlots };
-                          updateTour({ dateSpecificBlockDays: newDateSpecific });
-                        }}
-                      />
-                      <span className="text-gray-500 text-xs">to</span>
-                      <input
-                        type="time"
-                        className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
-                        value={slot.end}
-                        onChange={(e) => {
-                          const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                          const newSlots = [...(dateOverride.slots || [])];
-                          newSlots[slotIndex] = { ...slot, end: e.target.value };
-                          newDateSpecific[index] = { ...dateOverride, slots: newSlots };
-                          updateTour({ dateSpecificBlockDays: newDateSpecific });
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                          newDateSpecific[index] = {
-                            ...dateOverride,
-                            slots: (dateOverride.slots || []).filter((_, i) => i !== slotIndex)
-                          };
-                          updateTour({ dateSpecificBlockDays: newDateSpecific });
-                        }}
-                        className="text-red-600 hover:bg-red-50 p-1 rounded-lg"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
-        ))}
+        )}
       </div>
-    </div>
+    ))}
+  </div>
+</div>
 
   </div>
 );
@@ -1008,29 +936,18 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
 
   const handleSaveTour = async (tourToSave: Tour) => {
     try {
-      // Save or update this tour
       if (isEditing && tourToSave.tourId) {
         const { tourId, ...updateData } = tourToSave;
         await updateDoc(doc(db, "Tours", tourId), updateData);
-        // If applyToAllTours selected, propagate dateSpecificBlockDays to all tours
-        if (tourToSave.applyToAllTours) {
-          await applyUniversalDatesToAll(tourToSave.dateSpecificBlockDays || []);
-        }
         alert('Tour updated!');
       } else {
         const { tourId, ...newTourData } = tourToSave;
-        const addedRef = await addDoc(collection(db, "Tours"), {
+        await addDoc(collection(db, "Tours"), {
           ...newTourData,
           createdAt: new Date().toISOString().split('T')[0],
           upcomingBookings: 0,
           totalBookings: 0,
         });
-        // After creating, if applyToAllTours selected, apply to existing tours
-        if (tourToSave.applyToAllTours) {
-          // applyUniversalDatesToAll will iterate all tours and include the new tour too (it will update existing docs)
-          // Note: addDoc already created the new tour; the batch will update every tour doc including ones created earlier.
-          await applyUniversalDatesToAll(tourToSave.dateSpecificBlockDays || []);
-        }
         alert('Tour created!');
       }
       onBack();
@@ -1225,6 +1142,17 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     return () => unsubscribe();
   }, [setTours]);
 
+  // const updateTour = async (updatedTour: Tour) => {
+  //   if (!updatedTour.tourId) return;
+  //   try {
+  //     const tourRef = doc(db, "Tours", updatedTour.tourId);
+  //     await updateDoc(tourRef, updatedTour);
+  //     setTours(tours.map((tour) => (tour.tourId === updatedTour.tourId ? updatedTour : tour)));
+  //   } catch (err) {
+  //     console.error("Error updating tour:", err);
+  //   }
+  // };
+
   const getDateRange = (tour: Tour) => {
     if (tour.startDate && tour.endDate) {
       const start = new Date(tour.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1379,11 +1307,27 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                     
                     {tour.published && (
                       <div className="flex items-center space-x-6 mt-4 pt-4 border-t border-gray-100">
+                        {/* <div className="text-sm">
+                          <span className="text-gray-600">Upcoming: </span>
+                          <span className="font-medium text-blue-600">{tour.upcomingBookings || 0}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-gray-600">Total Bookings: </span>
+                          <span className="font-medium text-gray-900">{tour.totalBookings || 0}</span>
+                        </div> */}
                       </div>
                     )}
                   </div>
                   
                   <div className="flex items-center space-x-2 ml-4">
+                    {/* <button
+                      onClick={() => alert(`Viewing tour: ${tour.title}`)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                      title="View Tour"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button> */}
+                    
                     <button
                       onClick={() => onEditTour(tour)}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
