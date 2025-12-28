@@ -11,6 +11,7 @@ import ScheduleView from './pages/admin/views/schedule';
 import ToursManagementView from './pages/admin/views/toursManagement';
 import BESAManagementView from './pages/admin/views/BESAManagements';
 import OfficeHoursView from './pages/admin/views/officeHoursView.tsx';
+import SettingsView from './pages/admin/views/settings';
 import DynamicBookingForm from './pages/DynamicBookingFlow.tsx';
 import BookingConfirmationPage from './pages/BookingConfirmationPage.tsx';
 import ParkingInstructionsPage from './pages/ParkingInstructionsPage.tsx';
@@ -220,6 +221,7 @@ function App() {
         <Route path='/admin/tours' element={<DashboardLayout><ToursManagementView /></DashboardLayout>} />
         <Route path='/admin/besas' element={<DashboardLayout><BESAManagementView /></DashboardLayout>} />
         <Route path='/admin/office-hours' element={<DashboardLayout><OfficeHoursView /></DashboardLayout>} />
+        <Route path='/admin/settings' element={<DashboardLayout><SettingsView /></DashboardLayout>} />
         
         {/* Booking Routes */}
         <Route path="/booking/:tourId" element={<DynamicBookingForm/>}/>

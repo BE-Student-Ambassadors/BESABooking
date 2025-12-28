@@ -256,6 +256,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                   })}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
+                {/* Auto generate requieres 'build app' feature in BESA account */}
                 <span className="text-xs 2xl:text-sm text-gray-600">Auto-generate Zoom link</span>
               </label>
             </div>
