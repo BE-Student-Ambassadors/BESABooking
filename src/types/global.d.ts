@@ -128,7 +128,8 @@ declare global {
         tourType?: string;
         status?: string,
         date: string;
-        time: string;
+        startTime: string;
+        endTime: string;
         attendees: number;
         maxAttendees: number;
         besas: string[];

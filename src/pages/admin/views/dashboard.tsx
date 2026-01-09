@@ -226,6 +226,7 @@ const futureBookings = bookings
   // Auto-assign all available BESAs to a booking
   const autoAssignBesas = (bookingData: BookingData) => {
     const availableBesas = getAvailableBesas(bookingData);
+    console.log(availableBesas);
     return {
       ...bookingData,
       besas: availableBesas.map(besa => besa.name)

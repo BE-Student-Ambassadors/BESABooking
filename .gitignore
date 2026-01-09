@@ -36,14 +36,3 @@ src/google92b6b100bdfc843f.html
 src/besa-booking-469920-27ffc6b3226b.json
 
 
-/api/.venv/
-/api/.env
-/api/credentials.json
-
-api/token.json
-api/client_secret.json
-
-serviceAccountKey.json
-
-api/__pycache__/
-api/api/__pycache__/

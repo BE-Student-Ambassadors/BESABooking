@@ -158,7 +158,8 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     tourId: preselectedTour || "",
     tourType: "",
     date: "",
-    time: "",
+    startTime: "",
+    endTime: "",
     attendees: 1,
     maxAttendees: 1, // Default group size to 1
     firstName: "",
@@ -465,7 +466,7 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
         if (!bookingData.date) newErrors.date = "Please select a date";
         break;
       case 2:
-        if (!bookingData.time) newErrors.time = "Please select a time slot";
+        if (!bookingData.startTime) newErrors.time = "Please select a time slot";
         if (bookingData.maxAttendees < 1) newErrors.maxAttendees = "Group size must be at least 1";
         break;
       case 3:
@@ -513,15 +514,16 @@ const handleSubmit = async () => {
     const durationMins =
       selected.durationUnit === "hours" ? selected.duration * 60 : selected.duration;
 
-    if (!bookingData.date || !bookingData.time) {
+    if (!bookingData.date || !bookingData.startTime) {
       throw new Error("Missing date or time.");
     }
 
-    const startLocal = parseLocalDateTime(bookingData.date, bookingData.time);
+    const startLocal = parseLocalDateTime(bookingData.date, bookingData.startTime);
     const endLocal = addMinutes(startLocal, durationMins);
 
     const startISO = toLocalISO(startLocal);
     const endISO = toLocalISO(endLocal);
+
 
     let calendarEventLink = "";
 
@@ -533,7 +535,8 @@ const handleSubmit = async () => {
       id: bookingWithId.id,
       tourTitle: selected.title,
       date: bookingData.date,
-      time: bookingData.time,
+      startTime: bookingData.startTime,
+      endTime: endLocal,
       duration: selected.duration,
       durationUnit: selected.durationUnit,
       groupSize: bookingData.maxAttendees,
@@ -546,7 +549,7 @@ const handleSubmit = async () => {
       location: selected.location,
       zoomLink: selected.zoomLink,
       calendarEventLink,
-      createdAt: bookingWithId.createdAt,
+      createdAt: bookingWithId.createdAt
     };
 
     // 5) Navigate to confirmation page with booking data
@@ -965,9 +968,6 @@ const renderSection2 = () => {
         }
       }
       
-      // Filter out:
-      // 1. Time slots that are full
-      // 2. Time slots that don't meet minimum notice requirement
       const availableSlots = allTimeSlots.filter(time => 
         !isTimeSlotFull(time) && isTimeSlotValid(time)
       );
@@ -1023,9 +1023,9 @@ const renderSection2 = () => {
                 return (
                   <button
                     key={time}
-                    onClick={() => updateBookingData("time", time)}
+                    onClick={() => updateBookingData("startTime", time)}
                     className={`p-4 border-2 rounded-lg text-center transition-all hover:shadow-md ${
-                      bookingData.time === time
+                      bookingData.startTime === time
                         ? "border-blue-500 bg-blue-50 text-blue-700"
                         : "border-gray-200 hover:border-gray-300"
                     }`}
@@ -1268,7 +1268,7 @@ const renderSection3 = () => {
             {bookingData.tourType || tours.find((t) => t.tourId === bookingData.tourId)?.title}
           </p>
           <p>
-            <span className="font-medium">Date & Time:</span> {bookingData.date} at {bookingData.time}
+            <span className="font-medium">Date & Time:</span> {bookingData.date} at {bookingData.startTime}
           </p>
           <p>
             <span className="font-medium">Group Size:</span> {bookingData.maxAttendees} people
