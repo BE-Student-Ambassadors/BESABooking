@@ -174,6 +174,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     leadGuide: "",
     notes: "",
     besas: [],
+    accommodations: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1351,6 +1352,19 @@ const renderSection3 = () => {
         </div>
       </div>
 
+      <div className="bg-gray-50 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Accommodations or Special Requests</h3>
+        <p className="text-sm text-gray-600 mb-3">
+          Let us know about accessibility needs, language support, or anything else that will help us prepare for your visit.
+        </p>
+        <textarea
+          value={bookingData.accommodations}
+          onChange={(e) => updateBookingData("accommodations", e.target.value)}
+          className="w-full min-h-[120px] px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+          placeholder="Example: Wheelchair access needed, ASL interpreter, etc."
+        />
+      </div>
+
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h4 className="font-semibold text-blue-900 mb-3">Booking Summary</h4>
         <div className="space-y-2 text-sm text-blue-800">
@@ -1374,6 +1388,12 @@ const renderSection3 = () => {
                 .map(id => majorInterests.find(interest => interest.id === id)?.label)
                 .filter(Boolean)
                 .join(", ")}
+            </p>
+          )}
+          {bookingData.accommodations && (
+            <p>
+              <span className="font-medium">Accommodations:</span>{" "}
+              {bookingData.accommodations}
             </p>
           )}
         </div>

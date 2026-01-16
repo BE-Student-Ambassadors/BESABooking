@@ -141,6 +141,7 @@ declare global {
         phone?: string;
         organization?: string;
         role?: string;
+        accommodations?: string;
         interests: string[];
         leadGuide?: string,
         notes?: string,
