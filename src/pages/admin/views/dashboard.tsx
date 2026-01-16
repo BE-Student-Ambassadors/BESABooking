@@ -108,11 +108,12 @@ export default function DashboardView() {
         const snapshot = await getDocs(bookingsRef);
         const data = snapshot.docs.map((doc) => {
           const docData = doc.data() as any;
+          const normalizedBesas = docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : []);
+
           return {
-            bookingId: doc.id, // unique per booking doc
             ...docData,
-            // Back-compat: convert single besa to array
-            besas: docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : [])
+            bookingId: doc.id, // always prefer Firestore doc id over any stale bookingId field
+            besas: normalizedBesas
           };
         }) as BookingData[];
 
@@ -242,8 +243,8 @@ export default function DashboardView() {
     const data = snapshot.docs.map((doc) => {
       const docData = doc.data() as any;
       return {
-        bookingId: doc.id,
         ...docData,
+        bookingId: doc.id, // ensure we always use the Firestore doc id
         besas: docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : [])
       };
     }) as BookingData[];
