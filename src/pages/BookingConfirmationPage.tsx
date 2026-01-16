@@ -121,7 +121,6 @@ const BookingConfirmationPage: React.FC = () => {
         console.log("Error sharing:", err);
       }
     } else {
-      // Fallback - copy to clipboard
       const shareText = `Campus Tour Booking Confirmed!\n\nTour: ${bookingData.tourTitle}\nDate: ${formatDate(bookingData.date)}\nTime: ${bookingData.time}\nGroup Size: ${bookingData.groupSize}`;
       navigator.clipboard.writeText(shareText);
       alert("Booking details copied to clipboard!");
@@ -155,8 +154,8 @@ const BookingConfirmationPage: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
               <CheckCircle className="w-10 h-10 text-green-500" />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-2">Booking Confirmed!</h2>
-            <p className="text-green-100 text-lg">
+            <h2 className="text-3xl font-bold text-green-500 mb-2">Booking Confirmed!</h2>
+            <p className="text-green-500 text-lg">
               Your campus tour has been successfully scheduled
             </p>
           </div>
