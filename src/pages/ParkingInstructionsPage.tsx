@@ -70,8 +70,8 @@ const ParkingInstructionsPage: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
               <Car className="w-10 h-10 text-blue-600" />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-2">BE Tour Parking Guide</h2>
-            <p className="text-blue-100 text-lg">
+            <h2 className="text-3xl font-bold text-blue-500 mb-2">BE Tour Parking Guide</h2>
+            <p className="text-blue-500 text-lg">
               Everything you need to know about parking for your Baskin Engineering tour
             </p>
           </div>
