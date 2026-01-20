@@ -3,14 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import {Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft} from "lucide-react";
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
-import { getCalendarAccessToken, insertCalendarEvent } from "../calendarAPI.tsx";
+// import { getCalendarAccessToken, insertCalendarEvent } from "../calendarAPI.tsx";
+import api from "../api.ts";
 
-// Add Booking type definition (adjust fields as needed)
-type Booking = {
-  tourId: string;
-  date: string;
-  time: string;
-  // Add other fields as needed
+type BookingRecord = {
+  tourId?: string;
+  date?: string;
+  time?: string;
+  startTime?: string;
 };
 
 {/* Have calendar date show actual available dates (doesn't allow weekends, etc ) */}
@@ -80,21 +80,21 @@ function BookingPage() {
       const toursData: Tour[] = querySnapshot.docs.map((d) => {
         const data: any = d.data();
         return {
-          tourId: d.id, 
+          tourId: d.id, // ← Changed from 'id' to 'tourId'
           title: data.title ?? "",
           description: data.description ?? "",
           duration: data.duration ?? 0,
           durationUnit: data.durationUnit ?? "minutes",
           maxAttendeesPerBooking: data.maxAttendees ?? 5,
           maxBookings: data.maxBookings ?? 3,
-          startDate: data.startDate,
-          endDate: data.endDate, 
+          startDate: data.startDate, // ← Add this
+          endDate: data.endDate, // ← Add this
           location: data.location ?? "",
           zoomLink: data.zoomLink ?? "",
           autoGenerateZoom: data.autoGenerateZoom ?? false,
           weeklyHours: data.weeklyHours ?? {},
           dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
-          dateSpecificDays: data.dateSpecificDays ?? [], 
+          dateSpecificDays: data.dateSpecificDays ?? [], // ← Add this
           frequency: data.frequency ?? 1,
           frequencyUnit: data.frequencyUnit ?? "hours",
           registrationLimit: data.registrationLimit ?? 1,
@@ -154,8 +154,8 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
   // Booking Data State
   const [bookingData, setBookingData] = useState<BookingData>({
-    bookingId: "",
     tourId: preselectedTour || "",
+    bookingId: "",
     tourType: "",
     date: "",
     startTime: "",
@@ -175,15 +175,12 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     leadGuide: "",
     notes: "",
     besas: [],
-    accommodations: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // --- Add bookings state and fetch logic ---
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [universalOverrides, setUniversalOverrides] = useState<any[]>([]);
-
+  const [bookings, setBookings] = useState<BookingRecord[]>([]);
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -196,21 +193,6 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       }
     };
     fetchBookings();
-  }, []);
-
-  useEffect(() => {
-    const fetchUniversal = async () => {
-      try {
-        const snap = await getDocs(collection(db, "UniversalDateOverrides"));
-        const data = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
-        setUniversalOverrides(data);
-      } catch (err) {
-        // If collection doesn't exist, just keep an empty array
-        console.warn("No universal overrides found or error fetching:", err);
-        setUniversalOverrides([]);
-      }
-    };
-    fetchUniversal();
   }, []);
 
   const sections = [
@@ -231,7 +213,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       ...prev,
       tourId: t.tourId,
       tourType: t.title,
-      maxAttendees: 1,
+      maxAttendees: 1, // Always default to 1 when selecting a tour
     }));
     console.log("Tour Selected", t.tourId);
   };
@@ -243,24 +225,6 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       setErrors((prev) => ({ ...prev, [field as string]: "" }));
     }
     console.log("Tour selected")
-  };
-
-  const formatPhoneNumber = (rawValue: string) => {
-    const digits = rawValue.replace(/\D/g, "").slice(0, 10);
-    if (!digits) return "";
-
-    if (digits.length < 4) {
-      return `(${digits}`;
-    }
-    if (digits.length < 7) {
-      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    }
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    updateBookingData("phone", formatted);
   };
 
   // Calendar Display for Section 1
@@ -442,6 +406,20 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     return slots;
   };
 
+const isDateInRange = (dateStr: string, start?: string, end?: string): boolean => {
+  if (!start) return false;
+  const date = new Date(dateStr + "T00:00:00");
+  const startDate = new Date(start + "T00:00:00");
+  const endDate = end ? new Date(end + "T23:59:59") : new Date(start + "T23:59:59");
+  return date >= startDate && date <= endDate;
+};
+
+const findDateOverride = (dateStr: string, tour: Tour) =>
+  tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
+
+const getBookingTime = (booking: BookingRecord): string | undefined =>
+  booking.startTime ?? booking.time;
+
 const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; reason?: string } => {
   if (!dateString) {
     return { available: false, reason: "Please select a date" };
@@ -460,24 +438,20 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const dayOfWeek = dayNames[selectedDate.getDay()];
 
+  // Check if date falls within any dateSpecificDays range
+  const isInDateRange = tour.dateSpecificDays?.some(range => {
+    const start = new Date(range.startDate);
+    const end = new Date(range.endDate);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return selectedDate >= start && selectedDate <= end;
+  });
+
   // Check if the day of week has available hours in weeklyHours
   const hasWeeklyHours = tour.weeklyHours?.[dayOfWeek]?.length > 0;
 
-  // Holidays / blocked days (dateSpecificDays now treated as unavailable ranges)
-  const blockedByDateSpecific = tour.dateSpecificDays?.some((range) => {
-    const blockStart = new Date(range.startDate + 'T00:00:00');
-    const blockEnd = new Date((range.endDate || range.startDate) + 'T23:59:59');
-    return selectedDate >= blockStart && selectedDate <= blockEnd;
-  });
-  if (blockedByDateSpecific) {
-    return {
-      available: false,
-      reason: "This date is unavailable (holiday or special closure).",
-    };
-  }
-
-  // Date must have weekly hours for that day
-  if (!hasWeeklyHours) {
+  // Date must either be in a date range OR have weekly hours for that day
+  if (!isInDateRange && !hasWeeklyHours) {
     return { 
       available: false, 
       reason: "Unable to book on this day. Please select an available date." 
@@ -485,27 +459,15 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   }
 
   // Check dateSpecificBlockDays for unavailable dates
-  const dateSpecific = tour.dateSpecificBlockDays?.find(d => {
-  const blockStart = new Date(d.startDate);
-  const blockEnd = new Date(d.endDate ?? d.startDate);
+  const dateSpecific = findDateOverride(dateString, tour);
+  if (dateSpecific?.unavailable) {
+    return { 
+      available: false, 
+      reason: "This date is unavailable for bookings." 
+    };
+  }
 
-  blockStart.setHours(0, 0, 0, 0);
-  blockEnd.setHours(23, 59, 59, 999);
-
-  const selected = new Date(dateString);
-  selected.setHours(12, 0, 0, 0);
-
-  return selected >= blockStart && selected <= blockEnd;
-});
-
-if (dateSpecific?.unavailable) {
-  return {
-    available: false,
-    reason: "This date is unavailable for bookings.",
-  };
-}
-
-return { available: true };
+  return { available: true };
 };
 
   // ---------- Validation ----------
@@ -579,51 +541,8 @@ const handleSubmit = async () => {
 
     let calendarEventLink = "";
 
-    try {
-      // 3) Get Google access token (browser OAuth) and insert the event
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
-      if (!clientId) throw new Error("VITE_GOOGLE_CLIENT_ID is missing.");
-
-      const accessToken = await getCalendarAccessToken(clientId);
-
-      const location = selected.zoomLink
-        ? `Online (Zoom): ${selected.zoomLink}`
-        : (selected.location || "");
-
-      const descriptionLines = [
-        `Tour: ${bookingData.tourType || selected.title}`,
-        `Date & Time: ${bookingData.date} at ${bookingData.time} (${userTimeZone})`,
-        `Group Size: ${bookingData.maxAttendees}`,
-        `Lead Guide: ${bookingData.leadGuide || "TBD"}`,
-        "",
-        "Contact",
-        `- Name: ${bookingData.firstName} ${bookingData.lastName}`,
-        `- Email: ${bookingData.email}`,
-        `- Phone: ${bookingData.phone}`,
-        "",
-        "Notes",
-      ].filter(Boolean);
-
-      const summary = `${selected.title} — ${bookingData.firstName} ${bookingData.lastName} (${bookingData.maxAttendees})`;
-
-      const event = await insertCalendarEvent({
-        accessToken,
-        summary,
-        description: descriptionLines.join("\n"),
-        location,
-        startISO,
-        endISO,
-        attendeeEmail: bookingData.email,
-        attendeeName: `${bookingData.firstName} ${bookingData.lastName}`,
-        timezone: userTimeZone,
-        calendarId: "primary", // change if you maintain a shared calendar
-      });
-
-      calendarEventLink = event?.htmlLink || "";
-      console.log("Calendar event created:", calendarEventLink || event?.id);
-    } catch (calendarError) {
-      console.error("Calendar integration failed:", calendarError);
-    }
+    await api.post('/book-tour/', bookingData);
+    console.log('bookingData', bookingData)
 
     // 4) Prepare data for confirmation page
     const confirmationData = {
@@ -695,66 +614,69 @@ const handleSubmit = async () => {
   const renderSection1 = () => {
   const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
 
-  // Calculate min/max date based on tour start/end and 24-hour notice.
-  // dateSpecificDays are treated as blocks/holidays (handled elsewhere), not the availability window.
+  // Calculate min/max date based on dateSpecificDays range and 24-hour notice
   const getDateRange = () => {
     if (!selectedTourData) return { minDate: null, maxDate: null };
 
     const now = new Date();
     
     // Calculate 24-hour minimum from now
-    const minNoticeDate = new Date(now);
+    let minNoticeDate = new Date(now);
     minNoticeDate.setDate(minNoticeDate.getDate() + 1);
     minNoticeDate.setHours(0, 0, 0, 0);
 
-    const startDate = selectedTourData.startDate
-      ? new Date(selectedTourData.startDate + "T00:00:00")
-      : null;
-    const endDate = selectedTourData.endDate
-      ? new Date(selectedTourData.endDate + "T23:59:59")
-      : null;
+    // Get dateSpecificDays range if it exists
+    let rangeMinDate = null;
+    let rangeMaxDate = null;
 
-    // Use the later of: 24-hour notice or tour start date
-    const minDate = startDate && startDate > minNoticeDate ? startDate : minNoticeDate;
+    if (selectedTourData.dateSpecificDays && selectedTourData.dateSpecificDays.length > 0) {
+      // Find the earliest startDate and latest endDate in the array
+      const dates = selectedTourData.dateSpecificDays.map(d => ({
+        start: new Date(d.startDate + 'T00:00:00'),
+        end: new Date(d.endDate + 'T00:00:00')
+      }));
 
-    // Use end date if it exists, otherwise calculate from maxNotice
-    let maxDate = endDate;
+      rangeMinDate = new Date(Math.min(...dates.map(d => d.start.getTime())));
+      rangeMaxDate = new Date(Math.max(...dates.map(d => d.end.getTime())));
+
+      console.log('dateSpecificDays range:', rangeMinDate.toDateString(), 'to', rangeMaxDate.toDateString());
+    }
+    
+
+    // Use the later of: 24-hour notice or range start date
+    let minDate = minNoticeDate;
+    if (rangeMinDate && rangeMinDate > minNoticeDate) {
+      minDate = rangeMinDate;
+    }
+
+    // Use range end date if it exists, otherwise calculate from maxNotice
+    let maxDate = rangeMaxDate;
     if (!maxDate) {
       maxDate = new Date(now);
       switch (selectedTourData.maxNoticeUnit) {
-        case "days":
+        case 'days':
           maxDate.setDate(maxDate.getDate() + selectedTourData.maxNotice);
           break;
-        case "weeks":
+        case 'weeks':
           maxDate.setDate(maxDate.getDate() + (selectedTourData.maxNotice * 7));
           break;
-        case "months":
+        case 'months':
           maxDate.setMonth(maxDate.getMonth() + selectedTourData.maxNotice);
           break;
       }
     }
 
-    console.log("Final date range - min:", minDate?.toDateString(), "max:", maxDate?.toDateString());
+    console.log('Final date range - min:', minDate?.toDateString(), 'max:', maxDate?.toDateString());
+
 
     return { minDate, maxDate };
   };
 
   const { minDate, maxDate } = getDateRange();
 
-  const isBlockedDate = (dateStr: string, tour: Tour | undefined = selectedTourData) => {
-    if (!tour?.dateSpecificDays || tour.dateSpecificDays.length === 0) return false;
-    const target = new Date(dateStr + "T00:00:00");
-    return tour.dateSpecificDays.some((range) => {
-      const start = new Date(range.startDate + "T00:00:00");
-      const end = new Date((range.endDate || range.startDate) + "T23:59:59");
-      return target >= start && target <= end;
-    });
-  };
-
   // Helper to check if a date has any available time slots
   const hasAvailableTimeSlots = (dateStr: string): boolean => {
     if (!selectedTourData) return false;
-    if (isBlockedDate(dateStr)) return false;
     
     const now = new Date();
     const minDateTime = new Date(now);
@@ -772,9 +694,7 @@ const handleSubmit = async () => {
         : selectedTourData.frequency;
     
     // Check for date-specific hours first
-    const dateSpecific = selectedTourData.dateSpecificBlockDays?.find(
-      (d) => d.startDate === dateStr && !d.unavailable
-    );
+    const dateSpecific = findDateOverride(dateStr, selectedTourData);
     
     let allTimeSlots: string[] = [];
     
@@ -812,11 +732,10 @@ const handleSubmit = async () => {
       if (slotDateTime < minDateTime) return false;
       
       // Check if slot is not full
-      const bookingCount = bookings.filter(
-        (booking: Booking) => 
-          booking.tourId === selectedTourData.tourId && 
-          booking.date === dateStr && 
-          booking.time === time
+      const bookingCount = bookings.filter((booking) =>
+        booking.tourId === selectedTourData.tourId &&
+        booking.date === dateStr &&
+        getBookingTime(booking) === time
       ).length;
       const maxBookings = selectedTourData.maxBookings || 1;
       
@@ -1004,14 +923,12 @@ const renderSection2 = () => {
     };
 
     // Count bookings for a specific date and time
-    const getBookingCount = (date: string, time: string): number => {
-      return bookings.filter(
-        (booking: Booking) => 
-          booking.tourId === selected.tourId && 
-          booking.date === date && 
-          booking.time === time
+    const getBookingCount = (date: string, time: string): number =>
+      bookings.filter((booking) =>
+        booking.tourId === selected.tourId &&
+        booking.date === date &&
+        getBookingTime(booking) === time
       ).length;
-    };
 
     // Check if a time slot is full
     const isTimeSlotFull = (time: string): boolean => {
@@ -1032,9 +949,7 @@ const renderSection2 = () => {
       console.log("Tour weeklyHours:", selected.weeklyHours);
       
       // Check for date-specific hours first
-      const dateSpecific = selected.dateSpecificBlockDays?.find(
-        (d) => d.startDate === date && !d.unavailable
-      );
+      const dateSpecific = findDateOverride(date, selected);
       
       let allTimeSlots: string[] = [];
       
@@ -1269,7 +1184,7 @@ const renderSection3 = () => {
             <input
               type="tel"
               value={bookingData.phone}
-              onChange={handlePhoneChange}
+              onChange={(e) => updateBookingData("phone", e.target.value)}
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contactPhone ? "border-red-500" : "border-gray-300"
                 }`}
               placeholder="(555) 123-4567"
@@ -1352,19 +1267,6 @@ const renderSection3 = () => {
         </div>
       </div>
 
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Accommodations or Special Requests</h3>
-        <p className="text-sm text-gray-600 mb-3">
-          Let us know about accessibility needs, language support, or anything else that will help us prepare for your visit.
-        </p>
-        <textarea
-          value={bookingData.accommodations}
-          onChange={(e) => updateBookingData("accommodations", e.target.value)}
-          className="w-full min-h-[120px] px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
-          placeholder="Example: Wheelchair access needed, ASL interpreter, etc."
-        />
-      </div>
-
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h4 className="font-semibold text-blue-900 mb-3">Booking Summary</h4>
         <div className="space-y-2 text-sm text-blue-800">
@@ -1388,12 +1290,6 @@ const renderSection3 = () => {
                 .map(id => majorInterests.find(interest => interest.id === id)?.label)
                 .filter(Boolean)
                 .join(", ")}
-            </p>
-          )}
-          {bookingData.accommodations && (
-            <p>
-              <span className="font-medium">Accommodations:</span>{" "}
-              {bookingData.accommodations}
             </p>
           )}
         </div>
