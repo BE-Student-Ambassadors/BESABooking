@@ -232,11 +232,11 @@ const BookingConfirmationPage: React.FC = () => {
                       {bookingData.zoomLink && (
                         <a
                           href={bookingData.zoomLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                          // target="_blank"
+                          // rel="noopener noreferrer"
                           className="text-blue-600 hover:underline text-sm"
                         >
-                          Join Zoom Meeting
+                          Zoom Link Will Be Sent Via Email
                         </a>
                       )}
                     </div>
