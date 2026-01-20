@@ -13,6 +13,31 @@ type BookingRecord = {
   startTime?: string;
 };
 
+interface BookingData {
+  tourId: string;
+  bookingId: string;
+  tourType: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  attendees: number;
+  maxAttendees: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  organization: string;
+  role: string;
+  interests: string[];
+  timeSlot: string;
+  groupSize: number;
+  status: string;
+  leadGuide: string;
+  notes: string;
+  besas: string[];
+  accessibility?: string;
+}
+
 {/* Have calendar date show actual available dates (doesn't allow weekends, etc ) */}
 {/* Hide tours not selected*/}
 {/* Scheduling Rules: Show Date Ranges */}
@@ -178,6 +203,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- Add bookings state and fetch logic ---
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
@@ -216,6 +242,14 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       maxAttendees: 1, // Always default to 1 when selecting a tour
     }));
     console.log("Tour Selected", t.tourId);
+  };
+
+  const formatPhoneNumber = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 10);
+    const len = digits.length;
+    if (len <= 3) return digits;
+    if (len <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
   };
 
 
@@ -487,7 +521,14 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
         if (!bookingData.firstName) newErrors.firstName = "First name is required";
         if (!bookingData.lastName) newErrors.lastName = "Last name is required";
         if (!bookingData.email) newErrors.contactEmail = "Email is required";
-        if (!bookingData.phone) newErrors.contactPhone = "Phone number is required";
+        if (!bookingData.phone) {
+          newErrors.contactPhone = "Phone number is required";
+        } else {
+          const digitsOnly = bookingData.phone.replace(/\D/g, "");
+          if (digitsOnly.length < 10) {
+            newErrors.contactPhone = "Enter a valid phone number with at least 10 digits";
+          }
+        }
         if (!bookingData.organization) newErrors.organization = "Organization is required";
         if (!bookingData.role) newErrors.role = "Role is required";
         break;
@@ -508,10 +549,10 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
 
   // ---------- Submit ----------
 const handleSubmit = async () => {
+  if (isSubmitting) return;
   if (!validateSection(currentSection)) return;
 
   try {
-    // 1) Save booking to Firestore (as you already do)
     const bookingsRef = collection(db, "Bookings");
     const newDocRef = doc(bookingsRef);
     const bookingWithId = {
@@ -519,9 +560,7 @@ const handleSubmit = async () => {
       id: newDocRef.id,
       createdAt: new Date().toISOString(),
     };
-    await setDoc(newDocRef, bookingWithId);
 
-    // 2) Build start/end Date from form + selected tour duration
     const selected = tours.find((t) => t.tourId === bookingData.tourId);
     if (!selected) throw new Error("Selected tour not found.");
 
@@ -535,16 +574,8 @@ const handleSubmit = async () => {
     const startLocal = parseLocalDateTime(bookingData.date, bookingData.startTime);
     const endLocal = addMinutes(startLocal, durationMins);
 
-    const startISO = toLocalISO(startLocal);
-    const endISO = toLocalISO(endLocal);
-
-
     let calendarEventLink = "";
 
-    await api.post('/book-tour/', bookingData);
-    console.log('bookingData', bookingData)
-
-    // 4) Prepare data for confirmation page
     const confirmationData = {
       id: bookingWithId.id,
       tourTitle: selected.title,
@@ -560,18 +591,27 @@ const handleSubmit = async () => {
       phone: bookingData.phone,
       organization: bookingData.organization,
       role: bookingData.role,
+      accessibility: bookingData.accessibility,
       location: selected.location,
       zoomLink: selected.zoomLink,
       calendarEventLink,
       createdAt: bookingWithId.createdAt
     };
 
-    // 5) Navigate to confirmation page with booking data
+    setIsSubmitting(true);
+
     navigate("/booking-confirmation", { 
       state: { bookingData: confirmationData },
       replace: true 
     });
 
+    try {
+      await setDoc(newDocRef, bookingWithId);
+      await api.post('/book-tour/', bookingData);
+      console.log('bookingData', bookingData);
+    } catch (error) {
+      console.error("Error during submission after navigation:", error);
+    }
   } catch (error) {
     console.error("Error during submission:", error);
     alert("Failed to submit booking. Please try again.");
@@ -1184,7 +1224,7 @@ const renderSection3 = () => {
             <input
               type="tel"
               value={bookingData.phone}
-              onChange={(e) => updateBookingData("phone", e.target.value)}
+              onChange={(e) => updateBookingData("phone", formatPhoneNumber(e.target.value))}
               className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contactPhone ? "border-red-500" : "border-gray-300"
                 }`}
               placeholder="(555) 123-4567"
@@ -1265,6 +1305,22 @@ const renderSection3 = () => {
             <p className="text-red-500 text-sm mt-2">{errors.interests}</p>
           )}
         </div>
+      </div>
+
+      <div className="bg-gray-50 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+          Accessibility & Special Requests
+        </h3>
+        <p className="text-sm text-gray-600 mb-3">
+          Tell us about any accessibility needs or accommodations we should prepare.
+        </p>
+        <textarea
+          value={bookingData.accessibility || ""}
+          onChange={(e) => updateBookingData("accessibility", e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+          placeholder="Example: wheelchair access, ASL interpreter, mobility assistance, or other notes"
+        />
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
@@ -1353,10 +1409,15 @@ const renderSection3 = () => {
             ) : (
               <button
                 onClick={handleSubmit}
-                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                disabled={isSubmitting}
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors ${
+                  isSubmitting
+                    ? "bg-green-300 text-white cursor-not-allowed"
+                    : "bg-green-600 text-white hover:bg-green-700"
+                }`}
               >
                 <Check className="w-4 h-4" />
-                Complete Booking
+                {isSubmitting ? "Booking..." : "Complete Booking"}
               </button>
             )}
           </div>
