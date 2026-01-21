@@ -497,72 +497,86 @@ const handleSubmit = async () => {
   if (!validateSection(currentSection)) return;
 
   try {
-    // 1) Save booking to Firestore (as you already do)
-    const bookingsRef = collection(db, "Bookings");
-    const newDocRef = doc(bookingsRef);
-    const bookingWithId = {
-      ...bookingData,
-      id: newDocRef.id,
-      createdAt: new Date().toISOString(),
-    };
-    await setDoc(newDocRef, bookingWithId);
-
-    // 2) Build start/end Date from form + selected tour duration
+    // 1) Find selected tour
     const selected = tours.find((t) => t.tourId === bookingData.tourId);
     if (!selected) throw new Error("Selected tour not found.");
 
     const durationMins =
-      selected.durationUnit === "hours" ? selected.duration * 60 : selected.duration;
+      selected.durationUnit === "hours"
+        ? selected.duration * 60
+        : selected.duration;
 
     if (!bookingData.date || !bookingData.startTime) {
       throw new Error("Missing date or time.");
     }
 
-    const startLocal = parseLocalDateTime(bookingData.date, bookingData.startTime);
+    // 2) Compute start/end
+    const startLocal = parseLocalDateTime(
+      bookingData.date,
+      bookingData.startTime
+    );
     const endLocal = addMinutes(startLocal, durationMins);
 
     const startISO = toLocalISO(startLocal);
     const endISO = toLocalISO(endLocal);
 
-
-    let calendarEventLink = "";
-
-    await api.post('/book-tour/', bookingData);
-    console.log('bookingData', bookingData)
-
-    // 4) Prepare data for confirmation page
-    const confirmationData = {
-      id: bookingWithId.id,
-      tourTitle: selected.title,
-      date: bookingData.date,
-      startTime: bookingData.startTime,
-      endTime: endLocal,
-      duration: selected.duration,
-      durationUnit: selected.durationUnit,
-      groupSize: bookingData.maxAttendees,
-      firstName: bookingData.firstName,
-      lastName: bookingData.lastName,
-      email: bookingData.email,
-      phone: bookingData.phone,
-      organization: bookingData.organization,
-      role: bookingData.role,
-      location: selected.location,
-      zoomLink: selected.zoomLink,
-      calendarEventLink,
-      createdAt: bookingWithId.createdAt
+    const updatedBookingData = {
+      ...bookingData,
+      endTime: endLocal.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      startTimeISO: startISO,
+      endTimeISO: endISO,
+      location: selected.location || "Not specified",
     };
 
-    // 5) Navigate to confirmation page with booking data
-    navigate("/booking-confirmation", { 
-      state: { bookingData: confirmationData },
-      replace: true 
-    });
+    // 4) Save to Firestore
+    const bookingsRef = collection(db, "Bookings");
+    const newDocRef = doc(bookingsRef);
 
+    await setDoc(newDocRef, {
+      ...updatedBookingData,
+      id: newDocRef.id,
+      createdAt: new Date().toISOString(),
+    });
+    console.log(bookingData);
+
+    // 5) Call backend with UPDATED data
+    await api.post("/book-tour/", updatedBookingData);
+
+    // 6) Confirmation data
+    const confirmationData = {
+      id: newDocRef.id,
+      tourTitle: selected.title,
+      date: updatedBookingData.date,
+      startTime: updatedBookingData.startTime,
+      endTime: updatedBookingData.endTime,
+      duration: selected.duration,
+      durationUnit: selected.durationUnit,
+      groupSize: updatedBookingData.maxAttendees,
+      firstName: updatedBookingData.firstName,
+      lastName: updatedBookingData.lastName,
+      email: updatedBookingData.email,
+      phone: updatedBookingData.phone,
+      organization: updatedBookingData.organization,
+      role: updatedBookingData.role,
+      location: selected.location,
+      zoomLink: selected.zoomLink,
+      calendarEventLink: "",
+      createdAt: new Date().toISOString(),
+    };
+
+    navigate("/booking-confirmation", {
+      state: { bookingData: confirmationData },
+      replace: true,
+    });
   } catch (error) {
     console.error("Error during submission:", error);
     alert("Failed to submit booking. Please try again.");
   }
 };
+
 
   // ---------- Renderers for Sections ----------
   const renderSectionIndicator = () => (
