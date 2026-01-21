@@ -526,8 +526,8 @@ const handleSubmit = async () => {
         hour: "numeric",
         minute: "2-digit",
       }),
-      startTimeISO: startISO,
-      endTimeISO: endISO,
+      startTimeISO: startLocal,
+      endTimeISO: endLocal,
       location: selected.location || "Not specified",
     };
 
