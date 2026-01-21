@@ -154,7 +154,7 @@ function App() {
           </h1>
           
           <p className="text-xl md:text-2xl mb-12 max-w-3xl mx-auto leading-relaxed text-white opacity-95">
-            Discover cutting-edge facilities and innovative programs with personalized tours led by our expert BESA guides
+            Discover facilities and innovative programs with personalized tours led by our BESA guides
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-center max-w-lg mx-auto px-4">
