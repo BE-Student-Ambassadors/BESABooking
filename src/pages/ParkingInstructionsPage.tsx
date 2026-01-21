@@ -66,12 +66,12 @@ const ParkingInstructionsPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-12 text-center">
+          <div className="bg-blue-600 px-8 py-12 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
               <Car className="w-10 h-10 text-blue-600" />
             </div>
-            <h2 className="text-3xl font-bold text-blue-500 mb-2">BE Tour Parking Guide</h2>
-            <p className="text-blue-500 text-lg">
+            <h2 className="text-3xl font-bold text-white mb-2">BE Tour Parking Guide</h2>
+            <p className="text-white text-lg">
               Everything you need to know about parking for your Baskin Engineering tour
             </p>
           </div>
