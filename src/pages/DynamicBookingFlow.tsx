@@ -20,6 +20,7 @@ interface BookingData {
   date: string;
   startTime: string;
   endTime: string;
+  time?: string;
   attendees: number;
   maxAttendees: number;
   firstName: string;
@@ -184,6 +185,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     tourType: "",
     date: "",
     startTime: "",
+    time: "",
     endTime: "",
     attendees: 1,
     maxAttendees: 1, // Default group size to 1
@@ -551,6 +553,7 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   const handleSubmit = async () => {
     if (isSubmitting) return;
     if (!validateSection(currentSection)) return;
+    setIsSubmitting(true);
 
     try {
       const selected = tours.find((t) => t.tourId === bookingData.tourId);
@@ -571,33 +574,42 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
       );
       const endLocal = addMinutes(startLocal, durationMins);
 
+      const bookingsRef = collection(db, "Bookings");
+      const newDocRef = doc(bookingsRef);
+      const bookingId = newDocRef.id;
+
       const updatedBookingData = {
         ...bookingData,
+        bookingId,
+        time: bookingData.startTime,
         endTime: endLocal.toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
         }),
-        startTimeISO: startLocal,
-        endTimeISO: endLocal,
+        startTimeISO: toLocalISO(startLocal),
+        endTimeISO: toLocalISO(endLocal),
         location: selected.location || "Not specified",
       };
 
-      const bookingsRef = collection(db, "Bookings");
-      const newDocRef = doc(bookingsRef);
-
       await setDoc(newDocRef, {
         ...updatedBookingData,
-        id: newDocRef.id,
+        id: bookingId,
         createdAt: new Date().toISOString(),
       });
-      console.log(bookingData);
+      console.log("Booking saved to Firestore", updatedBookingData);
 
-      await api.post("/book-tour/", updatedBookingData);
+      // Try to hit the API, but don't fail the booking if this call errors
+      try {
+        await api.post("/book-tour/", updatedBookingData);
+      } catch (apiError) {
+        console.warn("Booking saved to Firestore, but API call failed:", apiError);
+      }
 
       const confirmationData = {
-        id: newDocRef.id,
+        id: bookingId,
         tourTitle: selected.title,
         date: updatedBookingData.date,
+        time: updatedBookingData.time || updatedBookingData.startTime,
         startTime: updatedBookingData.startTime,
         endTime: updatedBookingData.endTime,
         duration: selected.duration,
@@ -623,6 +635,8 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
     } catch (error) {
       console.error("Error during submission:", error);
       alert("Failed to submit booking. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1079,7 +1093,10 @@ const renderSection2 = () => {
                 return (
                   <button
                     key={time}
-                    onClick={() => updateBookingData("startTime", time)}
+                    onClick={() => {
+                      updateBookingData("startTime", time);
+                      updateBookingData("time", time);
+                    }}
                     className={`p-4 border-2 rounded-lg text-center transition-all hover:shadow-md ${
                       bookingData.startTime === time
                         ? "border-blue-500 bg-blue-50 text-blue-700"

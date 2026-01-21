@@ -133,6 +133,7 @@ declare global {
         date: string;
         startTime: string;
         endTime: string;
+        time?: string;
         attendees: number;
         maxAttendees: number;
         besas: string[];
