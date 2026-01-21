@@ -140,7 +140,6 @@ function App() {
 
       {/* Hero Section with BE colors */}
       <div className="relative overflow-hidden" style={{ backgroundColor: '#003c6c' }}>
-        {/* Animated background elements - using only BE colors */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full blur-3xl animate-pulse" style={{ backgroundColor: 'rgba(242, 152, 19, 0.15)' }}></div>
           <div className="absolute top-60 -left-40 w-96 h-96 rounded-full blur-3xl animate-pulse" style={{ backgroundColor: 'rgba(19, 165, 220, 0.15)', animationDelay: '700ms' }}></div>
@@ -153,8 +152,8 @@ function App() {
             Baskin Engineering Tours
           </h1>
           
-          <p className="text-xl md:text-2xl mb-12 max-w-3xl mx-auto leading-relaxed text-white opacity-95">
-            Discover facilities and innovative programs with personalized tours led by our BESA guides
+          <p className="text-xl md:text-2xl mb-12 max-w-4xl mx-auto leading-relaxed text-white opacity-95">
+            Book a personalized tour of the Baskin Engineering Building led by our BESA guides
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-center max-w-lg mx-auto px-4">
@@ -173,22 +172,16 @@ function App() {
           </div>
         </div>
         
-        {/* Bottom wave decoration */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
-            <path d="M0,64L80,69.3C160,75,320,85,480,80C640,75,800,53,960,48C1120,43,1280,53,1360,58.7L1440,64L1440,120L1360,120C1280,120,1120,120,960,120C800,120,640,120,480,120C320,120,160,120,80,120L0,120Z" fill="#d0d0ce" fillOpacity="1"></path>
-          </svg>
-        </div>
       </div>
 
       {/* Tour Options Section */}
       <div id="tour-options" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center mb-8">
           <h2 className="text-4xl md:text-5xl font-extrabold mb-6" style={{ color: '#003c6c' }}>
-            Choose Your Specialized Tour
+            Choose The Tour That Best Suits You!
           </h2>
-          <p className="text-lg max-w-2xl mx-auto leading-relaxed" style={{ color: '#75787b' }}>
-            Select from our variety of tour options designed to accommodate different group sizes and interests
+          <p className="text-lg max-w-3xl mx-auto leading-relaxed" style={{ color: '#75787b' }}>
+            Select from our variety of tour options designed to accommodate tour sizes and interests.
           </p>
         </div>
 
