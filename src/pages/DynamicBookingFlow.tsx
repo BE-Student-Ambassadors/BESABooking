@@ -547,78 +547,87 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
 
   const prevSection = () => setCurrentSection((s) => Math.max(s - 1, 1));
 
-  // ---------- Submit ----------
-const handleSubmit = async () => {
-  if (isSubmitting) return;
-  if (!validateSection(currentSection)) return;
-
-  try {
-    const bookingsRef = collection(db, "Bookings");
-    const newDocRef = doc(bookingsRef);
-    const bookingWithId = {
-      ...bookingData,
-      id: newDocRef.id,
-      createdAt: new Date().toISOString(),
-    };
-
-    const selected = tours.find((t) => t.tourId === bookingData.tourId);
-    if (!selected) throw new Error("Selected tour not found.");
-
-    const durationMins =
-      selected.durationUnit === "hours" ? selected.duration * 60 : selected.duration;
-
-    if (!bookingData.date || !bookingData.startTime) {
-      throw new Error("Missing date or time.");
-    }
-
-    const startLocal = parseLocalDateTime(bookingData.date, bookingData.startTime);
-    const endLocal = addMinutes(startLocal, durationMins);
-
-    let calendarEventLink = "";
-
-    const confirmationData = {
-      id: bookingWithId.id,
-      tourTitle: selected.title,
-      date: bookingData.date,
-      startTime: bookingData.startTime,
-      endTime: endLocal,
-      duration: selected.duration,
-      durationUnit: selected.durationUnit,
-      groupSize: bookingData.maxAttendees,
-      firstName: bookingData.firstName,
-      lastName: bookingData.lastName,
-      email: bookingData.email,
-      phone: bookingData.phone,
-      organization: bookingData.organization,
-      role: bookingData.role,
-      accessibility: bookingData.accessibility,
-      location: selected.location,
-      zoomLink: selected.zoomLink,
-      calendarEventLink,
-      createdAt: bookingWithId.createdAt
-    };
-
-    setIsSubmitting(true);
-
-    navigate("/booking-confirmation", { 
-      state: { bookingData: confirmationData },
-      replace: true 
-    });
+    // ---------- Submit ----------
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    if (!validateSection(currentSection)) return;
 
     try {
-      await setDoc(newDocRef, bookingWithId);
-      await api.post('/book-tour/', bookingData);
-      console.log('bookingData', bookingData);
-    } catch (error) {
-      console.error("Error during submission after navigation:", error);
-    }
-  } catch (error) {
-    console.error("Error during submission:", error);
-    alert("Failed to submit booking. Please try again.");
-  }
-};
+      const selected = tours.find((t) => t.tourId === bookingData.tourId);
+      if (!selected) throw new Error("Selected tour not found.");
 
-  // ---------- Renderers for Sections ----------
+      const durationMins =
+        selected.durationUnit === "hours"
+          ? selected.duration * 60
+          : selected.duration;
+
+      if (!bookingData.date || !bookingData.startTime) {
+        throw new Error("Missing date or time.");
+      }
+
+      const startLocal = parseLocalDateTime(
+        bookingData.date,
+        bookingData.startTime
+      );
+      const endLocal = addMinutes(startLocal, durationMins);
+
+      const updatedBookingData = {
+        ...bookingData,
+        endTime: endLocal.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        startTimeISO: startLocal,
+        endTimeISO: endLocal,
+        location: selected.location || "Not specified",
+      };
+
+      const bookingsRef = collection(db, "Bookings");
+      const newDocRef = doc(bookingsRef);
+
+      await setDoc(newDocRef, {
+        ...updatedBookingData,
+        id: newDocRef.id,
+        createdAt: new Date().toISOString(),
+      });
+      console.log(bookingData);
+
+      await api.post("/book-tour/", updatedBookingData);
+
+      const confirmationData = {
+        id: newDocRef.id,
+        tourTitle: selected.title,
+        date: updatedBookingData.date,
+        startTime: updatedBookingData.startTime,
+        endTime: updatedBookingData.endTime,
+        duration: selected.duration,
+        durationUnit: selected.durationUnit,
+        groupSize: updatedBookingData.maxAttendees,
+        firstName: updatedBookingData.firstName,
+        lastName: updatedBookingData.lastName,
+        email: updatedBookingData.email,
+        phone: updatedBookingData.phone,
+        organization: updatedBookingData.organization,
+        role: updatedBookingData.role,
+        accessibility: updatedBookingData.accessibility,
+        location: selected.location,
+        zoomLink: selected.zoomLink,
+        calendarEventLink: "",
+        createdAt: new Date().toISOString(),
+      };
+
+      navigate("/booking-confirmation", {
+        state: { bookingData: confirmationData },
+        replace: true,
+      });
+    } catch (error) {
+      console.error("Error during submission:", error);
+      alert("Failed to submit booking. Please try again.");
+    }
+  };
+
+
+// ---------- Renderers for Sections ----------
   const renderSectionIndicator = () => (
     <div className="flex items-start justify-center mb-8">
       {sections.map((section, index) => (
