@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import type { UserRole } from "../../../appTypes.d.ts";
-import { Calendar, Users, Trash2, Plus, X } from 'lucide-react';
+import { Calendar, Users, Trash2, X } from 'lucide-react';
 import { db } from '../../../../src/firebase.ts';
 import { collection, getDocs, updateDoc, doc, deleteDoc } from "firebase/firestore";
 
-// Bookings don't delete, tourID problem (fixed by using bookingId)
-
 export default function DashboardView() {
-  const [currentRole, setCurrentRole] = useState<UserRole>("public");
+  const [currentRole] = useState<UserRole>("public");
   const [bookings, setBookings] = useState<BookingData[]>([]);
+  const [tour, setTour] = useState<Tour[]>([]);
   const [tours, setTours] = useState<Tour[]>([]);
   const [todaysTours, setTodaysTours] = useState(0);
   const [weeklyTours, setWeeklyTours] = useState(0);
@@ -176,7 +175,7 @@ export default function DashboardView() {
     return base;
   };
 
-  // Only upcoming bookings (now or later)
+  // Only upcoming bookings
   const futureBookings = bookings
     .filter((b) => {
       if (!b?.date) return false;
@@ -204,7 +203,7 @@ export default function DashboardView() {
   // Get available BESAs for a specific booking
   const getAvailableBesas = (booking: BookingData) => {
     return besaList.filter(besa => 
-      besa.status === 'active' && isBesaAvailable(besa, booking.date, booking.time)
+      besa.status === 'active' && isBesaAvailable(besa, booking.date, booking.startTime)
     );
   };
 
@@ -285,13 +284,13 @@ export default function DashboardView() {
   };
 
   // Add a new BESA slot
-  const addBesaSlot = () => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      besas: [...(formData.besas || []), '']
-    });
-  };
+  // const addBesaSlot = () => {
+  //   if (!formData) return;
+  //   setFormData({
+  //     ...formData,
+  //     besas: [...(formData.besas || []), '']
+  //   });
+  // };
 
   // Remove a BESA slot
   const removeBesaSlot = (index: number) => {
@@ -305,15 +304,15 @@ export default function DashboardView() {
   };
 
   // Update a specific BESA slot
-  const updateBesaSlot = (index: number, value: string) => {
-    if (!formData) return;
-    const newBesas = [...(formData.besas || [])];
-    newBesas[index] = value;
-    setFormData({
-      ...formData,
-      besas: newBesas
-    });
-  };
+  // const updateBesaSlot = (index: number, value: string) => {
+  //   if (!formData) return;
+  //   const newBesas = [...(formData.besas || [])];
+  //   newBesas[index] = value;
+  //   setFormData({
+  //     ...formData,
+  //     besas: newBesas
+  //   });
+  // };
 
   // Reassign BESAs based on current date/time
   const reassignBesas = () => {
@@ -374,7 +373,7 @@ export default function DashboardView() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tour</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendees</th>
+                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendees</th> */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BESAs</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -395,9 +394,9 @@ export default function DashboardView() {
                     {booking.date}
                     <div className="text-sm text-gray-500">{booking.time}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {booking.maxAttendees}/{tours.find(t => t.title === booking.tourType)?.maxBookings}
-                  </td>
+                  </td> */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {booking.besas && booking.besas.length > 0 ? (
                       <div className="space-y-1">
