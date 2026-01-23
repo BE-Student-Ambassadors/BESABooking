@@ -176,15 +176,26 @@ export default function DashboardView() {
     return base;
   };
 
-  // Only upcoming bookings
+  const normalizeDateKey = (dateStr: string | undefined) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const [y, m, d] = parts;
+    return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  };
+
+  // Today's bookings + future bookings (even if time earlier today)
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const futureBookings = bookings
+    .map((b) => ({ ...b, date: normalizeDateKey(b.date) }))
     .filter((b) => {
       if (!b?.date) return false;
-      const when = toDateTime(b.date, b.time);
-      const now = new Date();
+      if (b.date === todayKey) return true;
+      const when = toDateTime(b.date, b.time || b.startTime);
       return when.getTime() >= now.getTime();
     })
-    .sort((a, b) => toDateTime(a.date, a.time).getTime() - toDateTime(b.date, b.time).getTime());
+    .sort((a, b) => toDateTime(a.date, a.time || a.startTime).getTime() - toDateTime(b.date, b.time || b.startTime).getTime());
 
   // Check if a booking time falls within a BESA's availability
   const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string) => {

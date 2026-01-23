@@ -34,6 +34,13 @@ export default function ScheduleView() {
   };
   const ymdKey = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const normalizeDateKey = (dateStr: string | undefined) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const [y, m, d] = parts;
+    return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  };
 
   // ---------- calendar math ----------
   const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
@@ -139,6 +146,7 @@ export default function ScheduleView() {
         const bookingsData = querySnapshot.docs.map(doc => ({
           bookingId: doc.id,
           ...doc.data(),
+          date: normalizeDateKey((doc.data() as any).date),
         })) as BookingData[];
         setBookings(bookingsData);
       } catch (error) {
