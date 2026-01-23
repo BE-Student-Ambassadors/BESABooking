@@ -32,7 +32,7 @@ interface BookingConfirmationData {
   location: string;
   zoomLink?: string;
   specialRequests?: string;
-  accessibility?: string;
+  accommodations?: string;
   calendarEventLink?: string;
   createdAt: string;
 }
@@ -288,13 +288,13 @@ const BookingConfirmationPage: React.FC = () => {
             </div>
 
             {/* Special Requests */}
-            {(bookingData.specialRequests || bookingData.accessibility) && (
+            {(bookingData.specialRequests || bookingData.accommodations) && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-8">
                 <h3 className="text-lg font-semibold text-yellow-900 mb-3">Special Notes</h3>
-                {bookingData.accessibility && (
+                {bookingData.accommodations && (
                   <div className="mb-3">
-                    <p className="font-medium text-yellow-800">Accessibility Requirements:</p>
-                    <p className="text-yellow-700">{bookingData.accessibility}</p>
+                    <p className="font-medium text-yellow-800">accommodations Requirements:</p>
+                    <p className="text-yellow-700">{bookingData.accommodations}</p>
                   </div>
                 )}
                 {bookingData.specialRequests && (

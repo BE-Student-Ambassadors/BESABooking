@@ -36,7 +36,7 @@ interface BookingData {
   leadGuide: string;
   notes: string;
   besas: string[];
-  accessibility?: string;
+  accommodations?: string;
 }
 
 {/* Have calendar date show actual available dates (doesn't allow weekends, etc ) */}
@@ -202,10 +202,12 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     leadGuide: "",
     notes: "",
     besas: [],
+    accommodations: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [besas, setBesas] = useState<BesaData[]>([]);
 
   // --- Add bookings state and fetch logic ---
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
@@ -221,6 +223,76 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       }
     };
     fetchBookings();
+  }, []);
+
+  // Fetch BESA availability for auto-assignment
+  useEffect(() => {
+    const normalizeOfficeHours = (officeHours: any = {}): Record<string, DayHours> => {
+      const converted: Record<string, DayHours> = {};
+      Object.entries(officeHours).forEach(([day, hours]) => {
+        if (
+          hours &&
+          typeof hours === "object" &&
+          "start" in hours &&
+          "end" in hours
+        ) {
+          converted[day] = {
+            available: true,
+            timeSlots: [
+              {
+                id: Math.random().toString(36).substr(2, 9),
+                start: typeof (hours as any).start === "string" ? (hours as any).start : "09:00",
+                end: typeof (hours as any).end === "string" ? (hours as any).end : "17:00",
+              },
+            ],
+          };
+        } else if (
+          hours &&
+          typeof hours === "object" &&
+          "available" in hours &&
+          "timeSlots" in hours
+        ) {
+          converted[day] = {
+            available: !!(hours as any).available,
+            timeSlots: Array.isArray((hours as any).timeSlots)
+              ? (hours as any).timeSlots.map((slot: any) => ({
+                  id: typeof slot.id === "string" ? slot.id : Math.random().toString(36).substr(2, 9),
+                  start: typeof slot.start === "string" ? slot.start : "09:00",
+                  end: typeof slot.end === "string" ? slot.end : "17:00",
+                }))
+              : [],
+          };
+        } else {
+          converted[day] = {
+            available: false,
+            timeSlots: [],
+          };
+        }
+      });
+      return converted;
+    };
+
+    const fetchBesas = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "Besas"));
+        const data = snapshot.docs.map((besaDoc) => {
+          const docData = besaDoc.data() as any;
+          return {
+            id: besaDoc.id,
+            name: docData.name,
+            email: docData.email,
+            status: docData.status,
+            role: docData.role,
+            officeHours: normalizeOfficeHours(docData.officeHours || {}),
+          } as BesaData;
+        });
+        setBesas(data);
+      } catch (error) {
+        console.error("Error fetching BESAs for auto-assignment:", error);
+      }
+    };
+
+    fetchBesas();
   }, []);
 
   const sections = [
@@ -450,11 +522,58 @@ const isDateInRange = (dateStr: string, start?: string, end?: string): boolean =
   return date >= startDate && date <= endDate;
 };
 
-const findDateOverride = (dateStr: string, tour: Tour) =>
+  const findDateOverride = (dateStr: string, tour: Tour) =>
   tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
 
 const getBookingTime = (booking: BookingRecord): string | undefined =>
   booking.startTime ?? booking.time;
+
+  const parseTime12Hour = (time12: string) => {
+    if (!time12) return "";
+    const timeRegex = /(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+    const match = time12.match(timeRegex);
+    if (!match) return "";
+    let hour = parseInt(match[1], 10);
+    const minute = match[2];
+    const ampm = match[3].toUpperCase();
+    if (ampm === "PM" && hour !== 12) hour += 12;
+    else if (ampm === "AM" && hour === 12) hour = 0;
+    return `${hour.toString().padStart(2, "0")}:${minute}`;
+  };
+
+  const toLocalDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
+  };
+
+  const dayMapping = {
+    0: "sunday",
+    1: "monday",
+    2: "tuesday",
+    3: "wednesday",
+    4: "thursday",
+    5: "friday",
+    6: "saturday",
+  } as const;
+
+  const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string) => {
+    if (!bookingDate || !bookingTime) return false;
+    const date = toLocalDate(bookingDate);
+    const dayOfWeek = date.getDay() as keyof typeof dayMapping;
+    const dayKey = dayMapping[dayOfWeek];
+    const dayHours = besa.officeHours[dayKey];
+    if (!dayHours || !dayHours.available || dayHours.timeSlots.length === 0) return false;
+    const bookingTime24 = parseTime12Hour(bookingTime);
+    if (!bookingTime24) return false;
+    return dayHours.timeSlots.some((slot) => bookingTime24 >= slot.start && bookingTime24 <= slot.end);
+  };
+
+  const getAutoAssignedBesas = (bookingDate: string, bookingTime: string) => {
+    if (!bookingDate || !bookingTime) return [];
+    return besas
+      .filter((besa) => besa.status === "active" && isBesaAvailable(besa, bookingDate, bookingTime))
+      .map((besa) => besa.name);
+  };
 
 const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; reason?: string } => {
   if (!dateString) {
@@ -591,16 +710,22 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
         location: selected.location || "Not specified",
       };
 
-      await setDoc(newDocRef, {
+      const autoAssignedBesas = getAutoAssignedBesas(updatedBookingData.date, updatedBookingData.startTime);
+
+      const bookingPayload = {
         ...updatedBookingData,
+        besas: autoAssignedBesas,
+        accommodations: updatedBookingData.accommodations || (updatedBookingData as any).accommodations || "",
         id: bookingId,
         createdAt: new Date().toISOString(),
-      });
-      console.log("Booking saved to Firestore", updatedBookingData);
+      };
+
+      await setDoc(newDocRef, bookingPayload);
+      console.log("Booking saved to Firestore with auto-assigned BESAs", bookingPayload);
 
       // Try to hit the API, but don't fail the booking if this call errors
       try {
-        await api.post("/book-tour/", updatedBookingData);
+        await api.post("/book-tour/", bookingPayload);
       } catch (apiError) {
         console.warn("Booking saved to Firestore, but API call failed:", apiError);
       }
@@ -608,20 +733,20 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
       const confirmationData = {
         id: bookingId,
         tourTitle: selected.title,
-        date: updatedBookingData.date,
-        time: updatedBookingData.time || updatedBookingData.startTime,
-        startTime: updatedBookingData.startTime,
-        endTime: updatedBookingData.endTime,
+        date: bookingPayload.date,
+        time: bookingPayload.time || bookingPayload.startTime,
+        startTime: bookingPayload.startTime,
+        endTime: bookingPayload.endTime,
         duration: selected.duration,
         durationUnit: selected.durationUnit,
-        groupSize: updatedBookingData.maxAttendees,
-        firstName: updatedBookingData.firstName,
-        lastName: updatedBookingData.lastName,
-        email: updatedBookingData.email,
-        phone: updatedBookingData.phone,
-        organization: updatedBookingData.organization,
-        role: updatedBookingData.role,
-        accessibility: updatedBookingData.accessibility,
+        groupSize: bookingPayload.maxAttendees,
+        firstName: bookingPayload.firstName,
+        lastName: bookingPayload.lastName,
+        email: bookingPayload.email,
+        phone: bookingPayload.phone,
+        organization: bookingPayload.organization,
+        role: bookingPayload.role,
+        accommodations: bookingPayload.accommodations,
         location: selected.location,
         zoomLink: selected.zoomLink,
         calendarEventLink: "",
@@ -1335,14 +1460,14 @@ const renderSection3 = () => {
 
       <div className="bg-gray-50 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-3">
-          Accessibility & Special Requests
+          accommodations & Special Requests
         </h3>
         <p className="text-sm text-gray-600 mb-3">
-          Tell us about any accessibility needs or accommodations we should prepare.
+          Tell us about any accommodations we should prepare.
         </p>
         <textarea
-          value={bookingData.accessibility || ""}
-          onChange={(e) => updateBookingData("accessibility", e.target.value)}
+          value={bookingData.accommodations || ""}
+          onChange={(e) => updateBookingData("accommodations", e.target.value)}
           rows={3}
           className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
           placeholder="Example: wheelchair access, ASL interpreter, mobility assistance, or other notes"
