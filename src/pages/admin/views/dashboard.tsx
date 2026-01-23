@@ -7,7 +7,6 @@ import { collection, getDocs, updateDoc, doc, deleteDoc } from "firebase/firesto
 export default function DashboardView() {
   const [currentRole] = useState<UserRole>("public");
   const [bookings, setBookings] = useState<BookingData[]>([]);
-  const [tour, setTour] = useState<Tour[]>([]);
   const [tours, setTours] = useState<Tour[]>([]);
   const [todaysTours, setTodaysTours] = useState(0);
   const [weeklyTours, setWeeklyTours] = useState(0);

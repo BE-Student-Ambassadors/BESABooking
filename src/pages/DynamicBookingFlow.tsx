@@ -560,7 +560,7 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
       if (!selected) throw new Error("Selected tour not found.");
 
       const durationMins =
-        selected.durationUnit === "hours"
+        selected.durationUnit === "hours" || selected.durationUnit === "hour"
           ? selected.duration * 60
           : selected.duration;
 
