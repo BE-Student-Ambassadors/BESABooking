@@ -79,6 +79,12 @@ export default function ScheduleView() {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
+  const toMinutes = (time24: string | undefined) => {
+    if (!time24 || !time24.includes(':')) return Number.MAX_SAFE_INTEGER;
+    const [h, m] = time24.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
   // ---------- data fetch ----------
   useEffect(() => {
     const fetchBesas = async () => {
@@ -314,9 +320,14 @@ export default function ScheduleView() {
                     >
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-medium text-gray-900">{booking.tourType}</p>
+                          <button
+                            onClick={() => setSelectedBooking(booking)}
+                            className="font-medium text-blue-600 hover:underline text-left"
+                          >
+                            {booking.tourType}
+                          </button>
                           <p className="text-sm text-gray-500">
-                            {format(parseYMDLocal(booking.date), 'MMM d, yyyy')} at {formatTime12Hour(booking.time)}
+                            {format(parseYMDLocal(booking.date), 'MMM d, yyyy')} at {formatTime12Hour(booking.time ?? '')}
                           </p>
                           <p className="text-sm text-gray-600">{booking.attendees} attendees</p>
                           <p className="text-sm text-gray-600">{booking.firstName} {booking.lastName}</p>
@@ -331,12 +342,6 @@ export default function ScheduleView() {
                           >
                             {booking.status}
                           </span>
-                          <button
-                            onClick={() => setSelectedBooking(booking)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -354,19 +359,31 @@ export default function ScheduleView() {
               <div className="space-y-3">
                 {besas
                   .filter(besa => besa.officeHours[selectedWeekday]?.available)
-                  .map(besa => (
+                  .map(besa => ({
+                    besa,
+                    earliest: Math.min(
+                      ...(
+                        besa.officeHours[selectedWeekday].timeSlots.map(slot => toMinutes(slot.start)) || [Number.MAX_SAFE_INTEGER]
+                      )
+                    ),
+                  }))
+                  .sort((a, b) => a.earliest - b.earliest)
+                  .map(({ besa }) => (
                     <div key={(besa as any).id} className="mb-2">
                       <span className="text-sm text-gray-900 font-semibold">{(besa as any).name}</span>
                       {besa.officeHours[selectedWeekday].timeSlots.length > 0 ? (
                         <div className="ml-2 flex flex-wrap gap-2 mt-1">
-                          {besa.officeHours[selectedWeekday].timeSlots.map(slot => (
-                            <span
-                              key={slot.id}
-                              className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded"
-                            >
-                              {formatTime12Hour(slot.start)} – {formatTime12Hour(slot.end)}
-                            </span>
-                          ))}
+                          {besa.officeHours[selectedWeekday].timeSlots
+                            .slice()
+                            .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
+                            .map(slot => (
+                              <span
+                                key={slot.id}
+                                className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded"
+                              >
+                                {formatTime12Hour(slot.start)} – {formatTime12Hour(slot.end)}
+                              </span>
+                            ))}
                         </div>
                       ) : (
                         <span className="ml-2 text-xs text-gray-500">No time slots</span>
@@ -435,7 +452,7 @@ export default function ScheduleView() {
                               <div>
                                 <p className="font-medium text-gray-900">{booking.tourType}</p>
                                 <p className="text-sm text-gray-500">
-                                  {formatTime12Hour(booking.time)}
+                                  {formatTime12Hour(booking.time ?? '')}
                                 </p>
                                 <p className="text-md text-gray-600">
                                   {booking.firstName} {booking.lastName}
@@ -502,7 +519,7 @@ export default function ScheduleView() {
               <div>
                 <span className="text-sm font-medium text-gray-700">Date & Time:</span>
                 <p className="text-sm text-gray-900">
-                  {format(parseYMDLocal(selectedBooking.date), 'MMMM d, yyyy')} at {formatTime12Hour(selectedBooking.time)}
+                  {format(parseYMDLocal(selectedBooking.date), 'MMMM d, yyyy')} at {formatTime12Hour(selectedBooking.time ?? '')}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
