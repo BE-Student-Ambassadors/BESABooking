@@ -176,7 +176,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 }) => {
   const [currentSection, setCurrentSection] = useState(1);
   const [selectedTour, setSelectedTour] = useState<string | null>(null);
-  const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Booking Data State
   const [bookingData, setBookingData] = useState<BookingData>({
