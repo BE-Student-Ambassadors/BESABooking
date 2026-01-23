@@ -165,7 +165,9 @@ export default function DashboardView() {
   };
 
   const toDateTime = (dateStr: string, time12?: string) => {
-    const base = new Date(`${dateStr}T00:00:00`);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    // Build local date to avoid timezone shifting to the previous day
+    const base = new Date(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0, 0);
     if (!time12) return base; // treat as start of day if no time
     const t24 = parseTime12Hour(time12);
     if (!t24) return base;
@@ -187,7 +189,9 @@ export default function DashboardView() {
   // Check if a booking time falls within a BESA's availability
   const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string) => {
     if (!bookingDate || !bookingTime) return false;
-    const date = new Date(bookingDate);
+    const [y, m, d] = bookingDate.split('-').map(Number);
+    // Build local date so we don't roll back a day from UTC parsing
+    const date = new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
     const dayOfWeek = date.getDay();
     const dayKey = dayMapping[dayOfWeek as keyof typeof dayMapping];
     const dayHours = besa.officeHours[dayKey];
@@ -409,7 +413,7 @@ export default function DashboardView() {
                         ))}
                       </div>
                     ) : (
-                      <span className="text-gray-400 italic">Auto-assigned</span>
+                      <span className="text-gray-400 italic">None Assigned</span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -429,7 +433,6 @@ export default function DashboardView() {
                         className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200"
                       >
                         <Trash2 className="h-3 w-3" />
-                        Delete
                       </button>
                     </div>
                   </td>
@@ -507,6 +510,11 @@ export default function DashboardView() {
                 )}
                 {viewingBooking.timeSlot && <p className="text-gray-700 mt-1">Time Slot: {viewingBooking.timeSlot}</p>}
                 {viewingBooking.notes && <p className="text-gray-700 mt-1">Notes: {viewingBooking.notes}</p>}
+                {viewingBooking.accommodations && (
+                  <p className="text-gray-700 mt-1">
+                    Accommodations: {viewingBooking.accommodations}
+                  </p>
+                )}
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
@@ -531,7 +539,7 @@ export default function DashboardView() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-500 italic">Auto-assigned</p>
+                  <p className="text-gray-500 italic">None Assigned</p>
                 )}
               </div>
 
@@ -547,9 +555,6 @@ export default function DashboardView() {
                   </div>
                 ) : (
                   <p className="text-gray-500 italic">No interests specified</p>
-                )}
-                {viewingBooking.accommodations && (
-                  <p className="text-gray-700 mt-2">Accommodations: {viewingBooking.accommodations}</p>
                 )}
               </div>
             </div>
@@ -658,7 +663,7 @@ export default function DashboardView() {
                   BESA Assignments
                   {formData.date && formData.time && (
                     <span className="text-sm text-gray-500 ml-2">
-                      (Auto-assigned for {new Date(formData.date).toLocaleDateString('en-US', { weekday: 'long' })} at {formData.time})
+                      (Auto-assigned for {toDateTime(formData.date).toLocaleDateString('en-US', { weekday: 'long' })} at {formData.time})
                     </span>
                   )}
                 </label>
