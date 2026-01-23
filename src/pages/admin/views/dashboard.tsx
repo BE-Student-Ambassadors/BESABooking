@@ -16,6 +16,7 @@ export default function DashboardView() {
   const [formData, setFormData] = useState<BookingData | null>(null);
   const [besaList, setBesaList] = useState<BesaData[]>([]);
   const [deleteBooking, setDeleteBooking] = useState<BookingData | null>(null);
+  const [viewingBooking, setViewingBooking] = useState<BookingData | null>(null);
 
   const dayMapping = {
     0: 'sunday',
@@ -383,7 +384,12 @@ export default function DashboardView() {
               {futureBookings.map((booking) => (
                 <tr key={booking.bookingId} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {booking.tourType}
+                    <button
+                      onClick={() => setViewingBooking(booking)}
+                      className="text-left text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      {booking.tourType || 'Untitled Tour'}
+                    </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {booking.date}
@@ -465,6 +471,89 @@ export default function DashboardView() {
               >
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Booking Details Modal */}
+      {viewingBooking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6 shadow-lg">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-sm text-gray-500">Tour</p>
+                <h3 className="text-2xl font-bold text-gray-900">{viewingBooking.tourType || 'Untitled Tour'}</h3>
+                <p className="text-sm text-gray-600">
+                  {viewingBooking.date}
+                  {viewingBooking.time && <span className="text-gray-500"> at {viewingBooking.time}</span>}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingBooking(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Booking</h4>
+                <p className="text-gray-900 font-medium">Attendees: {viewingBooking.attendees || 0}/{viewingBooking.maxAttendees || '—'}</p>
+                {viewingBooking.status && <p className="text-gray-700 mt-1">Status: {viewingBooking.status}</p>}
+                {(viewingBooking.startTime || viewingBooking.endTime) && (
+                  <p className="text-gray-700 mt-1">
+                    Window: {viewingBooking.startTime || '—'} - {viewingBooking.endTime || '—'}
+                  </p>
+                )}
+                {viewingBooking.timeSlot && <p className="text-gray-700 mt-1">Time Slot: {viewingBooking.timeSlot}</p>}
+                {viewingBooking.notes && <p className="text-gray-700 mt-1">Notes: {viewingBooking.notes}</p>}
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Contact</h4>
+                <p className="text-gray-900 font-medium">
+                  {[viewingBooking.firstName, viewingBooking.lastName].filter(Boolean).join(' ') || 'No name provided'}
+                </p>
+                {viewingBooking.email && <p className="text-gray-700">Email: {viewingBooking.email}</p>}
+                {viewingBooking.phone && <p className="text-gray-700">Phone: {viewingBooking.phone}</p>}
+                {viewingBooking.organization && <p className="text-gray-700">Organization: {viewingBooking.organization}</p>}
+                {viewingBooking.role && <p className="text-gray-700">Role: {viewingBooking.role}</p>}
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">BESAs</h4>
+                {viewingBooking.besas && viewingBooking.besas.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {viewingBooking.besas.map((besa) => (
+                      <span key={`${viewingBooking.bookingId}-${besa}`} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                        {besa}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">Auto-assigned</p>
+                )}
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Interests</h4>
+                {viewingBooking.interests && viewingBooking.interests.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {viewingBooking.interests.map((interest, index) => (
+                      <span key={`${interest}-${index}`} className="px-2 py-1 bg-green-100 text-green-800 rounded-full">
+                        {interest}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">No interests specified</p>
+                )}
+                {viewingBooking.accommodations && (
+                  <p className="text-gray-700 mt-2">Accommodations: {viewingBooking.accommodations}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
