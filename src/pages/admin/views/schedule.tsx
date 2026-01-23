@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../../src/firebase.ts';
-import { Calendar, List, Eye } from 'lucide-react';
+import { Calendar, List } from 'lucide-react';
 
 export default function ScheduleView() {
   const [besas, setBesas] = useState<Besa[]>([]);
@@ -450,7 +450,12 @@ export default function ScheduleView() {
                           >
                             <div className="flex justify-between items-start">
                               <div>
-                                <p className="font-medium text-gray-900">{booking.tourType}</p>
+                                <button
+                                  onClick={() => setSelectedBooking(booking)}
+                                  className="font-medium text-blue-600 hover:underline text-left"
+                                >
+                                  {booking.tourType}
+                                </button>
                                 <p className="text-sm text-gray-500">
                                   {formatTime12Hour(booking.time ?? '')}
                                 </p>
@@ -468,12 +473,6 @@ export default function ScheduleView() {
                                 >
                                   {booking.status}
                                 </span>
-                                <button
-                                  onClick={() => setSelectedBooking(booking)}
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </button>
                               </div>
                             </div>
                           </div>
