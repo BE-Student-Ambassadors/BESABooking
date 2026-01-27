@@ -724,12 +724,6 @@ export default function ScheduleView() {
                     <p className="text-sm text-gray-900">{selectedBooking.role}</p>
                   </div>
                 )}
-                {selectedBooking.interests && (
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Interests:</span>
-                    <p className="text-sm text-gray-900">{selectedBooking.interests}</p>
-                  </div>
-                )}
                 {selectedBooking.besas && (
                   <div>
                     <span className="text-sm font-medium text-gray-700">Assigned BESA:</span>
