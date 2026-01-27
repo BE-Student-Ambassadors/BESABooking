@@ -94,6 +94,7 @@ declare global {
         // Status
         published: boolean;
         createdAt?: string;
+        displayOrder?: number; // Optional ordering index for dashboard display
     };
 
 // Tour Booking

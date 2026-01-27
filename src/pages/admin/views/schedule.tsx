@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../../src/firebase.ts';
 import { Calendar, List } from 'lucide-react';
 
@@ -11,6 +11,10 @@ export default function ScheduleView() {
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [selectedBooking, setSelectedBooking] = useState<BookingData | null>(null);
+  const [editForm, setEditForm] = useState<BookingData | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [dateFilter, setDateFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
 
   // ---------- formatting helpers ----------
@@ -144,8 +148,8 @@ export default function ScheduleView() {
         const querySnapshot = await getDocs(collection(db, 'Bookings'));
         // Store the doc id as bookingId (stable key)
         const bookingsData = querySnapshot.docs.map(doc => ({
-          bookingId: doc.id,
           ...doc.data(),
+          bookingId: doc.id, // doc.id must win over any stored bookingId
           date: normalizeDateKey((doc.data() as any).date),
         })) as BookingData[];
         setBookings(bookingsData);
@@ -178,6 +182,59 @@ export default function ScheduleView() {
   };
   const handlePrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+
+  const handleSelectBooking = (booking: BookingData) => {
+    setSelectedBooking(booking);
+    setEditForm(booking);
+    setIsEditing(false);
+  };
+
+  const handleDeleteBooking = async () => {
+    if (!selectedBooking?.bookingId) {
+      alert('Missing booking id, cannot delete.');
+      return;
+    }
+
+    const confirmDelete = window.confirm('Delete this booking? This cannot be undone.');
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await deleteDoc(doc(db, 'Bookings', selectedBooking.bookingId));
+      setBookings(prev => prev.filter(b => b.bookingId !== selectedBooking.bookingId));
+      setSelectedBooking(null);
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+      alert('Failed to delete booking.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSaveBooking = async () => {
+    if (!editForm?.bookingId) {
+      alert('Missing booking id, cannot save changes.');
+      return;
+    }
+
+    const payload: BookingData = {
+      ...editForm,
+      date: normalizeDateKey(editForm.date),
+    } as BookingData;
+
+    try {
+      setIsSaving(true);
+      await updateDoc(doc(db, 'Bookings', editForm.bookingId), payload as any);
+      setBookings(prev => prev.map(b => (b.bookingId === editForm.bookingId ? { ...b, ...payload } : b)));
+      setSelectedBooking(prev => (prev && prev.bookingId === payload.bookingId ? { ...prev, ...payload } : prev));
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      alert('Failed to save changes.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // ---------- calendar: selected day + bookings ----------
   const selectedDateKey = ymdKey(selectedDate);
@@ -329,7 +386,7 @@ export default function ScheduleView() {
                       <div className="flex justify-between items-start">
                         <div>
                           <button
-                            onClick={() => setSelectedBooking(booking)}
+                            onClick={() => handleSelectBooking(booking)}
                             className="font-medium text-blue-600 hover:underline text-left"
                           >
                             {booking.tourType}
@@ -459,7 +516,7 @@ export default function ScheduleView() {
                             <div className="flex justify-between items-start">
                               <div>
                                 <button
-                                  onClick={() => setSelectedBooking(booking)}
+                                  onClick={() => handleSelectBooking(booking)}
                                   className="font-medium text-blue-600 hover:underline text-left"
                                 >
                                   {booking.tourType}
@@ -507,108 +564,219 @@ export default function ScheduleView() {
           <div className="bg-white rounded-xl shadow-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-lg font-bold text-gray-900">Booking Details</h3>
-              <button
-                onClick={() => setSelectedBooking(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl">
-                ✕
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setIsEditing(prev => !prev)}
+                  className="px-3 py-1 text-sm rounded-md border border-gray-200 hover:bg-gray-100"
+                >
+                  {isEditing ? 'Cancel' : 'Edit'}
+                </button>
+                <button
+                  onClick={handleDeleteBooking}
+                  className="px-3 py-1 text-sm rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Deleting…' : 'Delete'}
+                </button>
+                <button
+                  onClick={() => setSelectedBooking(null)}
+                  className="text-gray-400 hover:text-gray-600 text-xl">
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <span className="text-sm font-medium text-gray-700">Contact Name:</span>
-                <p className="text-sm text-gray-900">{selectedBooking.firstName} {selectedBooking.lastName}</p>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-700">Tour Type:</span>
-                <p className="text-sm text-gray-900">{selectedBooking.tourType}</p>
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-700">Date & Time:</span>
-                <p className="text-sm text-gray-900">
-                  {format(parseYMDLocal(selectedBooking.date), 'MMMM d, yyyy')} at {formatTime12Hour(selectedBooking.time ?? '')}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Attendees:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.maxAttendees}</p>
+            {isEditing ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm text-gray-700">First Name
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                      value={editForm?.firstName || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, firstName: e.target.value } as BookingData : prev)}
+                    />
+                  </label>
+                  <label className="text-sm text-gray-700">Last Name
+                    <input
+                      className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                      value={editForm?.lastName || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, lastName: e.target.value } as BookingData : prev)}
+                    />
+                  </label>
+                </div>
+
+                <label className="text-sm text-gray-700">Tour Type
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={editForm?.tourType || ''}
+                    onChange={e => setEditForm(prev => prev ? { ...prev, tourType: e.target.value } as BookingData : prev)}
+                  />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm text-gray-700">Date
+                    <input
+                      type="date"
+                      className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                      value={editForm?.date || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, date: e.target.value } as BookingData : prev)}
+                    />
+                  </label>
+                  <label className="text-sm text-gray-700">Time
+                    <input
+                      type="time"
+                      className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                      value={editForm?.time || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, time: e.target.value } as BookingData : prev)}
+                    />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm text-gray-700">Attendees
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                      value={editForm?.maxAttendees ?? ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, maxAttendees: Number(e.target.value) } as BookingData : prev)}
+                    />
+                  </label>
+                  <label className="text-sm text-gray-700">Status
+                    <select
+                      className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                      value={editForm?.status || ''}
+                      onChange={e => setEditForm(prev => prev ? { ...prev, status: e.target.value } as BookingData : prev)}
+                    >
+                      <option value="">Select status</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="pending">Pending</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="text-sm text-gray-700">Notes
+                  <textarea
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    rows={3}
+                    value={editForm?.notes || ''}
+                    onChange={e => setEditForm(prev => prev ? { ...prev, notes: e.target.value } as BookingData : prev)}
+                  />
+                </label>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="px-3 py-2 text-sm rounded-md border border-gray-200 hover:bg-gray-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveBooking}
+                    className="px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                    disabled={isSaving}
+                  >
+                    {isSaving ? 'Saving…' : 'Save Changes'}
+                  </button>
                 </div>
               </div>
-              <div>
-                <span className="text-sm font-medium text-gray-700">Contact Email:</span>
-                <p className="text-sm text-gray-900">{selectedBooking.email}</p>
-              </div>
-              {selectedBooking.phone && (
+            ) : (
+              <div className="space-y-4">
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Phone:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.phone}</p>
+                  <span className="text-sm font-medium text-gray-700">Contact Name:</span>
+                  <p className="text-sm text-gray-900">{selectedBooking.firstName} {selectedBooking.lastName}</p>
                 </div>
-              )}
-              {selectedBooking.organization && (
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Organization:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.organization}</p>
+                  <span className="text-sm font-medium text-gray-700">Tour Type:</span>
+                  <p className="text-sm text-gray-900">{selectedBooking.tourType}</p>
                 </div>
-              )}
-              {selectedBooking.role && (
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Role:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.role}</p>
+                  <span className="text-sm font-medium text-gray-700">Date & Time:</span>
+                  <p className="text-sm text-gray-900">
+                    {format(parseYMDLocal(selectedBooking.date), 'MMMM d, yyyy')} at {formatTime12Hour(selectedBooking.time ?? '')}
+                  </p>
                 </div>
-              )}
-              {selectedBooking.interests && (
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Interests:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.interests}</p>
-                </div>
-              )}
-              {selectedBooking.besas && (
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Assigned BESA:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.besas}</p>
-                </div>
-              )}
-              {selectedBooking.interests && selectedBooking.interests.length > 0 && (
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Interests:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedBooking.interests.map((interest, index) => (
-                      <span
-                        key={index}
-                        className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
-                      >
-                        {interest}
-                      </span>
-                    ))}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Attendees:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.maxAttendees}</p>
                   </div>
                 </div>
-              )}
-              {selectedBooking.leadGuide && (
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Lead Guide:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.leadGuide}</p>
+                  <span className="text-sm font-medium text-gray-700">Contact Email:</span>
+                  <p className="text-sm text-gray-900">{selectedBooking.email}</p>
                 </div>
-              )}
-              {selectedBooking.notes && (
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Notes:</span>
-                  <p className="text-sm text-gray-900">{selectedBooking.notes}</p>
-                </div>
-              )}
-              {selectedBooking.status && (
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Status:</span>
-                  <span className={`ml-2 px-2 py-1 text-xs font-semibold rounded-full ${
-                    selectedBooking.status === 'confirmed'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {selectedBooking.status}
-                  </span>
-                </div>
-              )}
-            </div>
+                {selectedBooking.phone && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Phone:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.phone}</p>
+                  </div>
+                )}
+                {selectedBooking.organization && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Organization:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.organization}</p>
+                  </div>
+                )}
+                {selectedBooking.role && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Role:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.role}</p>
+                  </div>
+                )}
+                {selectedBooking.interests && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Interests:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.interests}</p>
+                  </div>
+                )}
+                {selectedBooking.besas && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Assigned BESA:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.besas}</p>
+                  </div>
+                )}
+                {selectedBooking.interests && selectedBooking.interests.length > 0 && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Interests:</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {selectedBooking.interests.map((interest, index) => (
+                        <span
+                          key={index}
+                          className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
+                        >
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {selectedBooking.leadGuide && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Lead Guide:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.leadGuide}</p>
+                  </div>
+                )}
+                {selectedBooking.notes && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Notes:</span>
+                    <p className="text-sm text-gray-900">{selectedBooking.notes}</p>
+                  </div>
+                )}
+                {selectedBooking.status && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Status:</span>
+                    <span className={`ml-2 px-2 py-1 text-xs font-semibold rounded-full ${
+                      selectedBooking.status === 'confirmed'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {selectedBooking.status}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

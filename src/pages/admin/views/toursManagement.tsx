@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, Calendar, Clock, MapPin, Users, Settings, FileText, Bell, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, Bell, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
 
@@ -1128,6 +1128,10 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
 }) {
   const [searchTerm] = useState('');
   const [filterStatus] = useState<'all' | 'published' | 'draft'>('all');
+  const [reordering, setReordering] = useState(false);
+
+  const sortByDisplayOrder = (a: Tour, b: Tour) =>
+    (a.displayOrder ?? Number.MAX_SAFE_INTEGER) - (b.displayOrder ?? Number.MAX_SAFE_INTEGER);
 
   useEffect(() => {
     const toursRef = collection(db, "Tours");
@@ -1137,7 +1141,15 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
         tourId: doc.id,
         ...doc.data(),
       })) as Tour[];
-      setTours(tourData);
+
+      const orderedTours = [...tourData]
+        .map((tour, index) => ({
+          ...tour,
+          displayOrder: tour.displayOrder ?? index,
+        }))
+        .sort(sortByDisplayOrder);
+
+      setTours(orderedTours);
     });
 
     return () => unsubscribe();
@@ -1193,6 +1205,32 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     }
   };
 
+  const moveTour = async (tourId: string, direction: 'up' | 'down') => {
+    const ordered = [...tours].sort(sortByDisplayOrder);
+    const index = ordered.findIndex(t => t.tourId === tourId);
+    if (index === -1) return;
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= ordered.length) return;
+
+    [ordered[index], ordered[targetIndex]] = [ordered[targetIndex], ordered[index]];
+
+    const updated = ordered.map((tour, idx) => ({ ...tour, displayOrder: idx }));
+    setTours(updated);
+    setReordering(true);
+    try {
+      await Promise.all(
+        updated.map(t =>
+          updateDoc(doc(db, "Tours", t.tourId), { displayOrder: t.displayOrder ?? 0 })
+        )
+      );
+    } catch (err) {
+      console.error("Error updating tour order:", err);
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const getLocationDisplay = (tour: Tour) => {
     if (tour.location && (tour.zoomLink || tour.autoGenerateZoom)) {
       return 'Hybrid';
@@ -1214,6 +1252,8 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
       (filterStatus === "draft" && !tour.published);
     return matchesSearch && matchesStatus;
   });
+
+  const orderedFilteredTours = [...filteredTours].sort(sortByDisplayOrder);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1241,7 +1281,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
 
         {/* Tours List */}
         <div className="space-y-4">
-          {filteredTours.length === 0 ? (
+          {orderedFilteredTours.length === 0 ? (
             <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No tours found</h3>
@@ -1261,7 +1301,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
               )}
             </div>
           ) : (
-            filteredTours.map((tour) => (
+            orderedFilteredTours.map((tour, idx) => (
               <div key={tour.tourId} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -1321,6 +1361,25 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                   </div>
                   
                   <div className="flex items-center space-x-2 ml-4">
+                    <div className="flex flex-col mr-2">
+                      <button
+                        onClick={() => moveTour(tour.tourId, 'up')}
+                        disabled={reordering || idx === 0}
+                        className={`p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 ${idx === 0 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        title="Move up"
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => moveTour(tour.tourId, 'down')}
+                        disabled={reordering || idx === orderedFilteredTours.length - 1}
+                        className={`p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 ${idx === orderedFilteredTours.length - 1 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        title="Move down"
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
+                    </div>
+
                     {/* <button
                       onClick={() => alert(`Viewing tour: ${tour.title}`)}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
@@ -1394,7 +1453,7 @@ export default function ToursManagement() {
       );
     } else {
       // Add new tour
-      setTours(prevTours => [...prevTours, tour]);
+      setTours(prevTours => [...prevTours, { ...tour, displayOrder: prevTours.length }]);
     }
     setEditingTour(undefined);
   };

@@ -45,7 +45,7 @@ function App() {
     const fetchTours = async () => {
       try {
         const querySnapshot = await getDocs(collection(db, "Tours"));
-        const toursData: Tour[] = querySnapshot.docs.map((d) => {
+        const toursData: Tour[] = querySnapshot.docs.map((d, idx) => {
           const data: any = d.data();
           return {
             tourId: d.id,
@@ -89,8 +89,9 @@ function App() {
             createdAt: data.createdAt ?? "",
             upcomingBookings: data.upcomingBookings ?? 0,
             totalBookings: data.totalBookings ?? 0,
+            displayOrder: data.displayOrder ?? idx,
           } as Tour;
-        });
+        }).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
         setTours(toursData);
       } catch (error) {
         console.error("Error fetching tours:", error);
