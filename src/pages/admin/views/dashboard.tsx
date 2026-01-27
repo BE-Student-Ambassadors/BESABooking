@@ -381,13 +381,13 @@ export default function DashboardView() {
         <div className="p-6 border-b">
           <h2 className="text-xl font-bold text-gray-900">Recent Bookings</h2>
         </div>
-        <div className="overflow-x-auto">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tour</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendees</th> */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">BESAs</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -408,9 +408,6 @@ export default function DashboardView() {
                     {booking.date}
                     <div className="text-sm text-gray-500">{booking.time}</div>
                   </td>
-                  {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {booking.maxAttendees}/{tours.find(t => t.title === booking.tourType)?.maxBookings}
-                  </td> */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {booking.besas && booking.besas.length > 0 ? (
                       <div className="space-y-1">
@@ -458,6 +455,77 @@ export default function DashboardView() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {futureBookings.map((booking) => (
+            <div key={booking.bookingId} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <button
+                    onClick={() => setViewingBooking(booking)}
+                    className="text-base font-semibold text-blue-700 hover:text-blue-900"
+                  >
+                    {booking.tourType || 'Untitled Tour'}
+                  </button>
+                  <p className="text-sm text-gray-600">
+                    {booking.date}
+                    {booking.time && <span className="text-gray-500"> · {booking.time}</span>}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEditClick(booking)}
+                    className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(booking)}
+                    className="p-2 bg-red-100 text-red-700 rounded-full"
+                    aria-label="Delete booking"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2 text-sm text-gray-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 w-20">Contact</span>
+                  <span className="font-medium">{booking.firstName} {booking.lastName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 w-20">Email</span>
+                  <span className="text-gray-700 break-all">{booking.email || '—'}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-gray-500 w-20">BESAs</span>
+                  <div className="flex flex-wrap gap-2">
+                    {booking.besas && booking.besas.length > 0 ? (
+                      booking.besas.map((besa) => (
+                        <span
+                          key={`${booking.bookingId}-${besa}`}
+                          className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs"
+                        >
+                          {besa}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-400 italic">None Assigned</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {futureBookings.length === 0 && (
+            <div className="p-6 text-center text-sm text-gray-500">
+              No upcoming bookings.
+            </div>
+          )}
         </div>
       </div>
 
