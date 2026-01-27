@@ -142,16 +142,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps): JSX
               </button>
               <button
                 onClick={() => {
-                  navigate('/admin/settings');
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-left text-black hover:text-gray-900"
-              >
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </button>
-              <button
-                onClick={() => {
                   navigate('/admin/besas');
                   setIsMobileMenuOpen(false);
                 }}
@@ -169,6 +159,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps): JSX
               >
                 <Clock className="h-4 w-4" />
                 <span>Office Hours</span>
+              </button>
+              <button
+                onClick={() => {
+                  navigate('/admin/settings');
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg text-left text-black hover:text-gray-900"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
               </button>
               <button
                 onClick={handleLogout}

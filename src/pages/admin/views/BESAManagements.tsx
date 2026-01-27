@@ -219,8 +219,8 @@ export default function BESAManagementView() {
         </button>
       </div>
 
-      {/* Besa Table Display */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+      {/* Besa Table Display (desktop) */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
@@ -304,6 +304,73 @@ export default function BESAManagementView() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-4 md:hidden">
+        {besas.map((besa) => (
+          <div key={besa.id} className="bg-white rounded-xl shadow-sm border p-4">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <User className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <button
+                  onClick={() => handleBesaNameClick(besa.id, besa.name)}
+                  className="text-base font-semibold text-blue-600 hover:text-blue-800"
+                >
+                  {besa.name}
+                </button>
+                <div className="text-sm text-gray-500 truncate">{besa.email}</div>
+              </div>
+              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${besa.role === 'BESA Lead' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                {besa.role}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-gray-700">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                <span>This week: {besa.toursThisWeek}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-gray-400" />
+                <span>Total: {besa.totalTours}</span>
+              </div>
+              <div className="col-span-2 flex items-center gap-2">
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${besa.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {besa.status}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
+              <button
+                onClick={() => setSelectedBesa(besa.id)}
+                className="w-full sm:w-auto text-center px-3 py-2 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50"
+              >
+                Edit
+              </button>
+              <button
+                onClick={async () => {
+                  if (window.confirm(`Are you sure you want to deactivate and delete ${besa.name}? This action cannot be undone.`)) {
+                    try {
+                      const besaDocRef = doc(db, 'Besas', besa.id);
+                      await deleteDoc(besaDocRef);
+                      setBesas(prev => prev.filter(b => b.id !== besa.id));
+                    } catch (error) {
+                      console.error('Error deleting BESA:', error);
+                      alert('Failed to delete BESA. Please try again.');
+                    }
+                  }
+                }}
+                className="w-full sm:w-auto text-center px-3 py-2 rounded-lg border border-red-200 text-red-700 hover:bg-red-50"
+              >
+                Deactivate
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* BESA Tours Modal */}

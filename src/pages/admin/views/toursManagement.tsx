@@ -1303,7 +1303,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
           ) : (
             orderedFilteredTours.map((tour, idx) => (
               <div key={tour.tourId} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
                       <h3 className="text-xl font-semibold text-gray-900">{tour.title}</h3>
@@ -1360,23 +1360,25 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                     )}
                   </div>
                   
-                  <div className="flex items-center space-x-2 ml-4">
-                    <div className="flex flex-col mr-2">
+                  <div className="flex w-full sm:w-auto items-center sm:items-start justify-between sm:justify-end gap-3 sm:gap-2">
+                    <div className="flex sm:flex-col gap-1 sm:mr-2">
                       <button
                         onClick={() => moveTour(tour.tourId, 'up')}
                         disabled={reordering || idx === 0}
-                        className={`p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 ${idx === 0 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        className={`flex items-center justify-center px-3 py-2 sm:p-1 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 ${idx === 0 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
                         title="Move up"
                       >
                         <ArrowUp className="h-4 w-4" />
+                        <span className="ml-2 text-xs sm:hidden">Up</span>
                       </button>
                       <button
                         onClick={() => moveTour(tour.tourId, 'down')}
                         disabled={reordering || idx === orderedFilteredTours.length - 1}
-                        className={`p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 ${idx === orderedFilteredTours.length - 1 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        className={`flex items-center justify-center px-3 py-2 sm:p-1 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 ${idx === orderedFilteredTours.length - 1 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
                         title="Move down"
                       >
                         <ArrowDown className="h-4 w-4" />
+                        <span className="ml-2 text-xs sm:hidden">Down</span>
                       </button>
                     </div>
 
@@ -1385,12 +1387,12 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                       title="View Tour"
                     >
-                      <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4" />
                     </button> */}
                     
                     <button
                       onClick={() => onEditTour(tour)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                      className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                       title="Edit Tour"
                     >
                       <Edit3 className="h-4 w-4" />
@@ -1414,7 +1416,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                     
                     <button
                       onClick={() => handleDeleteTour(tour.tourId!)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
                       title="Delete Tour"
                     >
                       <Trash2 className="h-4 w-4" />
