@@ -16,6 +16,7 @@ import DynamicBookingForm from './pages/DynamicBookingFlow.tsx';
 import BookingConfirmationPage from './pages/BookingConfirmationPage.tsx';
 import ParkingInstructionsPage from './pages/ParkingInstructionsPage.tsx';
 import AdminPage from './pages/admin/adminLogin.tsx'; 
+import ModifyBookingsPage from './pages/ModifyBookings.tsx';
 
 // Feedback Button Component
 const FeedbackButton = () => {
@@ -157,7 +158,7 @@ function App() {
             Book a personalized tour of the Baskin Engineering Building led by our BESA guides
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 items-center justify-center max-w-lg mx-auto px-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-center max-w-xl mx-auto px-4">
             <a href="#tour-options" className="flex-1 sm:flex-none w-full sm:w-auto group">
               <button className="w-full text-white px-8 py-4 rounded-xl font-bold text-base md:text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex items-center justify-center space-x-2 shadow-lg" style={{ backgroundColor: '#f29813' }}>
                 <span>Book Your Tour</span>
@@ -165,6 +166,13 @@ function App() {
               </button>
             </a>
             
+            <a href="/modify-booking" className="flex-1 sm:flex-none w-full sm:w-auto group">
+              <button className="w-full text-white px-8 py-4 rounded-xl font-bold text-base md:text-lg transition-all duration-300 transform hover:scale-105 hover:shadow-2xl flex items-center justify-center space-x-2 shadow-lg" style={{ backgroundColor: '#0d6efd' }}>
+                <span>Modify Booking</span>
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+              </button>
+            </a>
+
             <a href="/parking-instructions" className="flex-1 sm:flex-none w-full sm:w-auto group">
               <button className="w-full text-white px-8 py-4 rounded-xl font-bold text-base md:text-lg transition-all duration-300 transform hover:scale-105" style={{ backgroundColor: '#13a5dc' }}>
                 Parking Info
@@ -264,6 +272,7 @@ function App() {
         {/* Booking Routes */}
         <Route path="/booking/:tourId" element={<DynamicBookingForm/>}/>
         <Route path="/booking-confirmation" element={<BookingConfirmationPage />} />
+        <Route path="/modify-booking" element={<ModifyBookingsPage />} />
         <Route path="/parking-instructions" element={<ParkingInstructionsPage />} />
       </Routes>
       

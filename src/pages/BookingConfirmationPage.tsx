@@ -327,9 +327,12 @@ const BookingConfirmationPage: React.FC = () => {
             <div className="bg-gray-100 rounded-lg p-4 mb-8">
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-sm text-gray-600">Booking Reference</p>
-                  <p className="font-mono text-lg font-semibold text-gray-900">
-                    #{bookingData.id.slice(-8).toUpperCase()}
+                  <p className="text-sm text-gray-600">Booking ID</p>
+                  <p className="font-mono text-sm sm:text-base font-semibold text-gray-900 break-all">
+                    {bookingData.id}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    (Use this ID to modify or cancel your booking)
                   </p>
                 </div>
                 <div className="text-right">
