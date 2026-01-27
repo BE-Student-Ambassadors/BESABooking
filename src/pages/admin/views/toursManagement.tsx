@@ -983,25 +983,32 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               const Icon = step.icon;
               const isActive = currentStep === step.number;
               const isCompleted = currentStep > step.number;
-              
+
+              const handleStepClick = () => {
+                setCurrentStep(step.number);
+              };
+
               return (
                 <div key={step.number} className="flex items-center flex-1">
-                  {/* Step Circle */}
-                  <div className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 flex-shrink-0 ${
-                    isCompleted 
-                      ? 'bg-green-600 border-green-600 text-white'
-                      : isActive 
-                        ? 'bg-blue-600 border-blue-600 text-white'
-                        : 'border-gray-300 text-gray-400'
-                  }`}>
+                  <button
+                    type="button"
+                    onClick={handleStepClick}
+                    className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 flex-shrink-0 transition-colors ${
+                      isCompleted 
+                        ? 'bg-green-600 border-green-600 text-white'
+                        : isActive 
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500'
+                    }`}
+                    aria-label={`Go to step ${step.number}: ${step.title}`}
+                  >
                     {isCompleted ? (
                       <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                     ) : (
                       <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     )}
-                  </div>
+                  </button>
                   
-                  {/* Progress Line */}
                   {index < steps.length - 1 && (
                     <div className={`flex-1 h-0.5 mx-2 sm:mx-4 ${
                       currentStep > step.number ? 'bg-green-600' : 'bg-gray-300'
