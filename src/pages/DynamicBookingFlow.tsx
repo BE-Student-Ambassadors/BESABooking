@@ -336,7 +336,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   };
 
   // Calendar Display for Section 1
-  const CustomCalendar: React.FC<CustomCalendarProps> = ({ selectedDate, onDateSelect, tourData, isDateAvailable }) => {
+  const CustomCalendar: React.FC<CustomCalendarProps> = ({ selectedDate, onDateSelect, tourData, isDateAvailable, minDate, maxDate }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const getDaysInMonth = (date: Date) => {
@@ -372,6 +372,18 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     
     // Disable past dates
     if (dateObj < today) return true;
+
+    // Respect tour-level min/max range if provided
+    if (minDate) {
+      const min = new Date(minDate);
+      min.setHours(0, 0, 0, 0);
+      if (dateObj < min) return true;
+    }
+    if (maxDate) {
+      const max = new Date(maxDate);
+      max.setHours(23, 59, 59, 999);
+      if (dateObj > max) return true;
+    }
     
     // If no tour selected, enable all future dates
     if (!tourData) return false;
@@ -575,6 +587,21 @@ const getBookingTime = (booking: BookingRecord): string | undefined =>
       .map((besa) => besa.name);
   };
 
+const toDateOnly = (value: any): Date | null => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const d = new Date(value + "T00:00:00");
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (value?.seconds) {
+    return new Date(value.seconds * 1000);
+  }
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  return null;
+};
+
 const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; reason?: string } => {
   if (!dateString) {
     return { available: false, reason: "Please select a date" };
@@ -587,6 +614,24 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   // Check if date is in the past
   if (selectedDate < today) {
     return { available: false, reason: "Cannot book past dates" };
+  }
+
+  // Respect tour start/end window
+  const tourStart = toDateOnly(tour.startDate);
+  const tourEnd = toDateOnly(tour.endDate);
+  if (tourStart) {
+    const start = new Date(tourStart);
+    start.setHours(0, 0, 0, 0);
+    if (selectedDate < start) {
+      return { available: false, reason: `Tour starts on ${start.toLocaleDateString()}` };
+    }
+  }
+  if (tourEnd) {
+    const end = new Date(tourEnd);
+    end.setHours(23, 59, 59, 999);
+    if (selectedDate > end) {
+      return { available: false, reason: `Tour ends on ${end.toLocaleDateString()}` };
+    }
   }
 
   // Get day of week (0 = Sunday, 6 = Saturday)
@@ -807,6 +852,8 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
     if (!selectedTourData) return { minDate: null, maxDate: null };
 
     const now = new Date();
+    const tourStart = toDateOnly(selectedTourData.startDate);
+    const tourEnd = toDateOnly(selectedTourData.endDate);
     
     // Calculate 24-hour minimum from now
     let minNoticeDate = new Date(now);
@@ -821,7 +868,7 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
       // Find the earliest startDate and latest endDate in the array
       const dates = selectedTourData.dateSpecificDays.map(d => ({
         start: new Date(d.startDate + 'T00:00:00'),
-        end: new Date(d.endDate + 'T00:00:00')
+        end: new Date(d.endDate + 'T23:59:59')
       }));
 
       rangeMinDate = new Date(Math.min(...dates.map(d => d.start.getTime())));
@@ -832,10 +879,9 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
     
 
     // Use the later of: 24-hour notice or range start date
-    let minDate = minNoticeDate;
-    if (rangeMinDate && rangeMinDate > minNoticeDate) {
-      minDate = rangeMinDate;
-    }
+    let minDate = [minNoticeDate, rangeMinDate, tourStart]
+      .filter((d): d is Date => !!d)
+      .reduce((max, d) => (d > max ? d : max), minNoticeDate);
 
     // Use range end date if it exists, otherwise calculate from maxNotice
     let maxDate = rangeMaxDate;
@@ -852,6 +898,18 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
           maxDate.setMonth(maxDate.getMonth() + selectedTourData.maxNotice);
           break;
       }
+    }
+
+    // Clamp to tour end date if provided
+    if (tourEnd && (!maxDate || tourEnd < maxDate)) {
+      const endOfDay = new Date(tourEnd);
+      endOfDay.setHours(23, 59, 59, 999);
+      maxDate = endOfDay;
+    }
+
+    // Guard against inverted ranges
+    if (maxDate && maxDate < minDate) {
+      maxDate = minDate;
     }
 
     console.log('Final date range - min:', minDate?.toDateString(), 'max:', maxDate?.toDateString());

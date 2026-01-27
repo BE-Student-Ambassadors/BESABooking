@@ -52,8 +52,14 @@ const BookingConfirmationPage: React.FC = () => {
 
   const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  const toLocalDate = (dateStr: string) => {
+    // Avoid implicit UTC parsing of bare YYYY-MM-DD which can shift by a day
+    const [y, m, d] = dateStr.split("-").map(Number);
+    return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0); // noon local prevents DST edge issues
+  };
+
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = toLocalDate(dateStr);
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -62,9 +68,20 @@ const BookingConfirmationPage: React.FC = () => {
     });
   };
 
+  const toLocalDateTime = (dateStr: string, time24: string) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const [hh, mm] = time24.split(":").map(Number);
+    return new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
+  };
+
   const generateCalendarFile = () => {
-    const startDate = new Date(`${bookingData.date}T${convertTo24Hour(bookingData.time)}`);
-    const endDate = new Date(startDate.getTime() + (bookingData.durationUnit === "hours" ? bookingData.duration * 60 : bookingData.duration) * 60000);
+    const startDate = toLocalDateTime(
+      bookingData.date,
+      convertTo24Hour(bookingData.time)
+    );
+    const durationMinutes =
+      (bookingData.durationUnit === "hours" ? bookingData.duration * 60 : bookingData.duration);
+    const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
     
     const formatCalendarDate = (date: Date) => {
       return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
