@@ -812,37 +812,61 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
 
 
 // ---------- Renderers for Sections ----------
-  const renderSectionIndicator = () => (
-    <div className="flex items-start justify-center mb-8">
-      {sections.map((section, index) => (
-        <div key={section.id} className="flex items-center">
-          <div className="text-center flex flex-col items-center">
-            <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-medium mb-2 ${section.id <= currentSection ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
-                }`}
-            >
-              {section.id < currentSection ? <Check className="w-6 h-6" /> : section.id}
-            </div>
-            <div className="text-center w-32">
-              <p
-                className={`text-sm font-medium ${section.id <= currentSection ? "text-blue-600" : "text-gray-500"
-                  }`}
-              >
-                {section.title}
-              </p>
-              <p className="text-xs text-gray-400 mt-1">{section.description}</p>
-            </div>
+  const renderSectionIndicator = () => {
+    const progressPct = (currentSection / sections.length) * 100;
+    return (
+      <>
+        {/* Mobile: compact pill + progress bar */}
+        <div className="sm:hidden mb-6 px-1">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-blue-700">
+              Step {currentSection} of {sections.length}
+            </span>
+            <span className="text-xs text-gray-500">
+              {sections.find(s => s.id === currentSection)?.title}
+            </span>
           </div>
-          {index < sections.length - 1 && (
+          <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
             <div
-              className={`w-20 h-1 mx-4 mt-6 flex-shrink-0 ${section.id < currentSection ? "bg-blue-600" : "bg-gray-200"
-                }`}
+              className="h-full bg-blue-600 transition-all"
+              style={{ width: `${progressPct}%` }}
             />
-          )}
+          </div>
         </div>
-      ))}
-    </div>
-  );
+
+        {/* Desktop: full stepper */}
+        <div className="hidden sm:flex items-start justify-start sm:justify-center mb-8 overflow-x-auto gap-4 py-2 px-1 -mx-1">
+          {sections.map((section, index) => (
+            <div key={section.id} className="flex items-center">
+              <div className="text-center flex flex-col items-center">
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-medium mb-2 ${section.id <= currentSection ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
+                    }`}
+                >
+                  {section.id < currentSection ? <Check className="w-6 h-6" /> : section.id}
+                </div>
+                <div className="text-center w-32">
+                  <p
+                    className={`text-sm font-medium ${section.id <= currentSection ? "text-blue-600" : "text-gray-500"
+                      }`}
+                  >
+                    {section.title}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">{section.description}</p>
+                </div>
+              </div>
+              {index < sections.length - 1 && (
+                <div
+                  className={`w-20 h-1 mx-4 mt-6 flex-shrink-0 ${section.id < currentSection ? "bg-blue-600" : "bg-gray-200"
+                    }`}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  };
 
   const renderSection1 = () => {
   const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
@@ -1255,7 +1279,7 @@ const renderSection2 = () => {
           <p className="text-gray-600">Choose from available times for your selected tour</p>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="p-2 bg-blue-600 rounded-lg">
               <Calendar className="w-5 h-5 text-white" />
             </div>
@@ -1269,7 +1293,7 @@ const renderSection2 = () => {
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Time Slots</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {availableTimes.length > 0 ? (
               availableTimes.map((time) => {
                 const remainingSpots = getRemainingSpots(time);
@@ -1308,7 +1332,7 @@ const renderSection2 = () => {
         {/* Group Size Selection */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Size</h3>
-          <div className="flex items-center space-x-6">  
+          <div className="flex items-center justify-center sm:justify-start space-x-6">  
             <button
               type="button"
               onClick={() => updateGroupSize(bookingData.maxAttendees - 1)}
@@ -1568,7 +1592,7 @@ const renderSection3 = () => {
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <button
               onClick={onBack}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
@@ -1576,15 +1600,17 @@ const renderSection3 = () => {
               <ArrowLeft className="w-5 h-5" />
               Back to Home
             </button>
-            <h1 className="text-3xl font-bold text-gray-900">Campus Tour Booking</h1>
-            <div className="w-24" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 text-left sm:text-center flex-1">
+              Campus Tour Booking
+            </h1>
+            <div className="w-24 hidden sm:block" />
           </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8">
           {renderSectionIndicator()}
 
           <div className="mb-8">
@@ -1594,14 +1620,14 @@ const renderSection3 = () => {
           </div>
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between pt-6 border-t">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between pt-6 border-t">
             <button
               onClick={prevSection}
               disabled={currentSection === 1}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors ${currentSection === 1
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
+              className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors ${currentSection === 1
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              } w-full sm:w-auto`}
             >
               <ArrowLeft className="w-4 h-4" />
               Previous
@@ -1610,7 +1636,7 @@ const renderSection3 = () => {
             {currentSection < 3 ? (
               <button
                 onClick={nextSection}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto"
               >
                 Continue
                 <ArrowRight className="w-4 h-4" />
@@ -1619,7 +1645,7 @@ const renderSection3 = () => {
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className={`flex items-center gap-2 px-6 py-3 rounded-lg transition-colors ${
+                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors w-full sm:w-auto ${
                   isSubmitting
                     ? "bg-green-300 text-white cursor-not-allowed"
                     : "bg-green-600 text-white hover:bg-green-700"
