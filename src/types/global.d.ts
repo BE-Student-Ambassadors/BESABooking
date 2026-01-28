@@ -148,6 +148,7 @@ declare global {
         interests: string[];
         leadGuide?: string,
         notes?: string,
+        modificationReason?: string,
     }
     
 

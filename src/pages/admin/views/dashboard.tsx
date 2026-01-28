@@ -594,6 +594,11 @@ export default function DashboardView() {
                     Accommodations: {viewingBooking.accommodations}
                   </p>
                 )}
+                {viewingBooking.modificationReason && (
+                  <p className="text-gray-700 mt-1">
+                    Reschedule/Cancellation Reason: {viewingBooking.modificationReason}
+                  </p>
+                )}
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">

@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, query, where, limit } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
 import { ArrowLeft, Calendar, Clock, Check, Search, Loader2, Trash2, Save } from "lucide-react";
 
 type BookingDoc = {
+  tourId?: string;
   tourType?: string;
   date?: string;
   time?: string;
@@ -29,6 +30,8 @@ const ModifyBookingsPage: React.FC = () => {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [tour, setTour] = useState<Tour | null>(null);
+  const [reason, setReason] = useState("");
+  const [lastName, setLastName] = useState("");
 
   const resetState = () => {
     setBooking(null);
@@ -37,20 +40,48 @@ const ModifyBookingsPage: React.FC = () => {
     setTime("");
     setError(null);
     setTour(null);
+    setReason("");
+    setLastName("");
   };
 
   const handleLookup = async () => {
-    const input = refCode.trim();
-    if (!input) return;
+    const idInput = refCode.trim();
+    const lastInput = lastName.trim();
+    if (!idInput && !lastInput) {
+      setError("Enter a booking ID or last name to search.");
+      return;
+    }
     setError(null);
     setLoading(true);
     resetState();
     try {
-      const directRef = doc(collection(db, "Bookings"), input);
-      const snap = await getDoc(directRef);
+      const bookingsCol = collection(db, "Bookings");
+
+      // 1) Try direct doc id lookup
+      let snap = idInput ? await getDoc(doc(bookingsCol, idInput)) : { exists: () => false } as any;
+
+      // 2) If not found, try last name equality (case-insensitive via lowercasing)
+      if (!snap.exists()) {
+        const q = query(
+          bookingsCol,
+          where("lastName", "==", lastInput || idInput),
+          limit(5)
+        );
+        const qSnap = await getDocs(q);
+        if (!qSnap.empty) {
+          // If multiple, pick the most recent createdAt if available
+          const sorted = qSnap.docs.sort((a, b) => {
+            const aTs = (a.data() as any).createdAt || "";
+            const bTs = (b.data() as any).createdAt || "";
+            return bTs.localeCompare(aTs);
+          });
+          snap = sorted[0];
+          setError(qSnap.size > 1 ? "Found multiple bookings; showing the most recent. Consider using the booking ID for precision." : null);
+        }
+      }
 
       if (!snap.exists()) {
-        setError("No booking found for that ID. Please paste the full booking ID from your confirmation.");
+        setError("No booking found for that ID or last name.");
         return;
       }
 
@@ -97,6 +128,56 @@ const ModifyBookingsPage: React.FC = () => {
     };
 
     const formattedTime = to12Hour(time);
+    const durationMinutes =
+      tour?.durationUnit === "hours" || tour?.durationUnit === "hour"
+        ? (tour?.duration || 0) * 60
+        : tour?.duration || 0;
+
+    const parseLocalDateTime = (dateStr: string, timeLabel: string) => {
+      const m = timeLabel.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (!m) return null;
+      let [, hhStr, mmStr, ampm] = m;
+      let hh = parseInt(hhStr, 10);
+      const mm = parseInt(mmStr, 10);
+      if (/PM/i.test(ampm) && hh !== 12) hh += 12;
+      if (/AM/i.test(ampm) && hh === 12) hh = 0;
+      const [Y, M, D] = dateStr.split("-").map(Number);
+      return new Date(Y, (M - 1), D, hh, mm, 0, 0);
+    };
+
+    const formatTime12 = (dt: Date) => {
+      const h = dt.getHours();
+      const m = dt.getMinutes();
+      const ampm = h >= 12 ? "PM" : "AM";
+      const h12 = h % 12 || 12;
+      return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+    };
+
+    const toLocalISO = (dt: Date) => {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const offMin = dt.getTimezoneOffset();
+      const sign = offMin > 0 ? "-" : "+";
+      const abs = Math.abs(offMin);
+      const offH = pad(Math.floor(abs / 60));
+      const offM = pad(abs % 60);
+      return (
+        `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}` +
+        `T${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}` +
+        `${sign}${offH}:${offM}`
+      );
+    };
+
+    let computedEndTime: string | undefined = undefined;
+    let startISO: string | undefined = undefined;
+    let endISO: string | undefined = undefined;
+
+    const startDt = parseLocalDateTime(date, formattedTime);
+    if (startDt && durationMinutes > 0) {
+      const endDt = new Date(startDt.getTime() + durationMinutes * 60000);
+      computedEndTime = formatTime12(endDt);
+      startISO = toLocalISO(startDt);
+      endISO = toLocalISO(endDt);
+    }
 
     // ---- validation against tour rules ----
     const toMinutes = (t: string) => {
@@ -190,6 +271,10 @@ const ModifyBookingsPage: React.FC = () => {
         date,
         time: formattedTime,
         startTime: formattedTime,
+        ...(computedEndTime ? { endTime: computedEndTime } : {}),
+        ...(startISO ? { startTimeISO: startISO } : {}),
+        ...(endISO ? { endTimeISO: endISO } : {}),
+        modificationReason: reason,
         updatedAt: new Date().toISOString(),
       });
       setError("Changes saved. Your booking has been updated.");
@@ -233,24 +318,34 @@ const ModifyBookingsPage: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="bg-white rounded-xl shadow-sm border p-6 space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-800">Booking Reference</label>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <label className="text-sm font-semibold text-gray-800">Find Your Booking</label>
+            <div className="grid sm:grid-cols-2 gap-3">
               <input
                 value={refCode}
                 onChange={(e) => setRefCode(e.target.value)}
-                placeholder="Enter reference (document ID)"
-                className="flex-1 rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Booking ID"
+                className="rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+              <input
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Last name"
+                className="rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button
                 onClick={handleLookup}
-                className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+                className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition w-full sm:w-auto"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 <span className="ml-2">Lookup</span>
               </button>
+              <p className="text-xs text-gray-500 sm:pt-3">
+                Enter the booking ID from your confirmation, or last name on booking if you don’t have it.
+              </p>
             </div>
-            <p className="text-xs text-gray-500">Use the reference from your confirmation page (e.g., the doc ID).</p>
           </div>
 
           {booking && (
@@ -291,6 +386,18 @@ const ModifyBookingsPage: React.FC = () => {
                     />
                   </div>
                 </label>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-800">
+                  Reason for reschedule/cancel
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Tell us why you're changing this booking"
+                />
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
