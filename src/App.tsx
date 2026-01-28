@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Users, Clock, Edit, ArrowRight } from 'lucide-react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
 import { collection, getDocs } from 'firebase/firestore';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { db } from '../src/firebase.ts'; 
+import { auth } from '../src/firebase.ts';
 
 import DashboardLayout from './pages/admin/adminDash';
 import DashboardView from './pages/admin/views/dashboard';
@@ -17,6 +19,33 @@ import BookingConfirmationPage from './pages/BookingConfirmationPage.tsx';
 import ParkingInstructionsPage from './pages/ParkingInstructionsPage.tsx';
 import AdminPage from './pages/admin/adminLogin.tsx'; 
 import ModifyBookingsPage from './pages/ModifyBookings.tsx';
+
+function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-600">
+        Checking access…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return children;
+}
 
 // Feedback Button Component
 const FeedbackButton = () => {
@@ -262,12 +291,54 @@ function App() {
         
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminPage />} />
-        <Route path='/admin/dashboard' element={<DashboardLayout><DashboardView /></DashboardLayout>} />
-        <Route path='/admin/schedule' element={<DashboardLayout><ScheduleView /></DashboardLayout>} />
-        <Route path='/admin/tours' element={<DashboardLayout><ToursManagementView /></DashboardLayout>} />
-        <Route path='/admin/besas' element={<DashboardLayout><BESAManagementView /></DashboardLayout>} />
-        <Route path='/admin/office-hours' element={<DashboardLayout><OfficeHoursView /></DashboardLayout>} />
-        <Route path='/admin/settings' element={<DashboardLayout><SettingsView /></DashboardLayout>} />
+        <Route
+          path='/admin/dashboard'
+          element={
+            <ProtectedRoute>
+              <DashboardLayout><DashboardView /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/admin/schedule'
+          element={
+            <ProtectedRoute>
+              <DashboardLayout><ScheduleView /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/admin/tours'
+          element={
+            <ProtectedRoute>
+              <DashboardLayout><ToursManagementView /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/admin/besas'
+          element={
+            <ProtectedRoute>
+              <DashboardLayout><BESAManagementView /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/admin/office-hours'
+          element={
+            <ProtectedRoute>
+              <DashboardLayout><OfficeHoursView /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/admin/settings'
+          element={
+            <ProtectedRoute>
+              <DashboardLayout><SettingsView /></DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
         
         {/* Booking Routes */}
         <Route path="/booking/:tourId" element={<DynamicBookingForm/>}/>
