@@ -157,15 +157,14 @@ const ParkingInstructionsPage: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <DollarSign className="w-5 h-5 text-green-600" />
                   <div>
-                    <p className="font-medium">1-Day Permit: $10.00</p>
-                    <p className="text-sm text-gray-600">1-Night Permit: $5.00</p>
+                    <p className="font-medium">1-Day Permit: $22.00</p>
+                    <p className="text-sm text-gray-600">1-Night Permit: $11.00</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Clock className="w-5 h-5 text-blue-600" />
                   <div>
-                    <p className="font-medium">Kiosk Hours: 7am-1pm</p>
-                    <p className="text-sm text-gray-600">TAPS Office: 7am-5pm</p>
+                    <p className="font-medium">Sales Office: 7am-5pm</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -203,8 +202,14 @@ const ParkingInstructionsPage: React.FC = () => {
                     <div>
                       <p className="font-semibold text-orange-900">Important:</p>
                       <p className="text-orange-800">
-                        Alert your event coordinator if you plan to arrive by bus. Parking for large vehicles (buses, RVs, limos) is only available at Barn Theater lot at the base of campus.
-                      </p>
+                    For information regarding bus parking or large vehicle access, please visit the{" "}
+                    <a  href="https://transportation.ucsc.edu/parking/parking-permits/visitor-guest-parking/"
+                        target="_blank"
+                        rel="noopener noreferrer" 
+                        className="font-semibold text-orange-900 hover:underline">
+                       TAPS informative page.
+                    </a>{" "}
+                  </p>
                     </div>
                   </div>
                 </div>
@@ -218,7 +223,7 @@ const ParkingInstructionsPage: React.FC = () => {
                     </li>
                     <li className="flex items-start gap-2">
                       <MapPin className="w-4 h-4 text-orange-600 mt-0.5" />
-                      Rachel Carson College (formerly College Eight) loading zone
+                      Rachel Carson College loading zone
                     </li>
                   </ul>
                 </div>
@@ -231,7 +236,7 @@ const ParkingInstructionsPage: React.FC = () => {
 
                 <div>
                   <p className="text-orange-800">
-                    If Barn Theater lot is full, call{" "}
+                    If you have any questions regarding bus parking or large vehicle access, call{" "}
                     <a href="tel:8314591097" className="font-semibold text-blue-600 hover:underline">
                       (831) 459-1097
                     </a>{" "}
@@ -265,24 +270,6 @@ const ParkingInstructionsPage: React.FC = () => {
                   <h4 className="font-semibold text-green-900 mb-3">Where to Purchase Permits:</h4>
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="bg-green-100 rounded-lg p-4">
-                      <h5 className="font-semibold text-green-900 mb-2">Main Entrance Kiosk</h5>
-                      <div className="space-y-1 text-green-800">
-                        <p className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4" />
-                          Coolidge Drive
-                        </p>
-                        <p className="flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          7:00am - 1:00pm
-                        </p>
-                        <p className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          Monday - Friday
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-green-100 rounded-lg p-4">
                       <h5 className="font-semibold text-green-900 mb-2">TAPS Sales Office</h5>
                       <div className="space-y-1 text-green-800">
                         <p className="flex items-center gap-2">
@@ -291,7 +278,7 @@ const ParkingInstructionsPage: React.FC = () => {
                         </p>
                         <p className="flex items-center gap-2">
                           <Clock className="w-4 h-4" />
-                          1:00pm - 5:00pm (also 7am-1pm)
+                          7:00am - 5:00pm
                         </p>
                         <p className="flex items-center gap-2">
                           <Calendar className="w-4 h-4" />
@@ -310,14 +297,14 @@ const ParkingInstructionsPage: React.FC = () => {
                         <DollarSign className="w-5 h-5 text-green-600" />
                         <div>
                           <p className="font-medium text-green-900">1-Day Permit</p>
-                          <p className="text-2xl font-bold text-green-700">$10.00</p>
+                          <p className="text-2xl font-bold text-green-700">$22.00</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <DollarSign className="w-5 h-5 text-green-600" />
                         <div>
                           <p className="font-medium text-green-900">1-Night Permit</p>
-                          <p className="text-2xl font-bold text-green-700">$5.00</p>
+                          <p className="text-2xl font-bold text-green-700">$11.00</p>
                         </div>
                       </div>
                     </div>
