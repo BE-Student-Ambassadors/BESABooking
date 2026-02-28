@@ -37,6 +37,7 @@ interface BookingData {
   notes: string;
   besas: string[];
   accommodations?: string;
+  largeTourDetails?: string;
 }
 
 {/* Have calendar date show actual available dates (doesn't allow weekends, etc ) */}
@@ -139,6 +140,8 @@ function BookingPage() {
             phone: false,
             attendeeCount: true,
             majorsInterested: false,
+            largeTourDetailsEnabled: false,
+            largeTourDetailsLabel: 'Please share details about your large in-person group (size, needs, schedule).',
             customQuestions: [],
           },
           reminderEmails: data.reminderEmails ?? [],
@@ -203,6 +206,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     notes: "",
     besas: [],
     accommodations: "",
+    largeTourDetails: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -568,7 +572,7 @@ const getBookingTime = (booking: BookingRecord): string | undefined =>
     6: "saturday",
   } as const;
 
-  const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string) => {
+  const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string, durationMinutes = 0) => {
     if (!bookingDate || !bookingTime) return false;
     const date = toLocalDate(bookingDate);
     const dayOfWeek = date.getDay() as keyof typeof dayMapping;
@@ -577,13 +581,19 @@ const getBookingTime = (booking: BookingRecord): string | undefined =>
     if (!dayHours || !dayHours.available || dayHours.timeSlots.length === 0) return false;
     const bookingTime24 = parseTime12Hour(bookingTime);
     if (!bookingTime24) return false;
-    return dayHours.timeSlots.some((slot) => bookingTime24 >= slot.start && bookingTime24 <= slot.end);
+    const bookingStartMins = toMinutes(bookingTime24);
+    const bookingEndMins = bookingStartMins + durationMinutes;
+    return dayHours.timeSlots.some((slot) => {
+      const slotStart = toMinutes(slot.start);
+      const slotEnd = toMinutes(slot.end);
+      return slotStart <= bookingStartMins && bookingEndMins <= slotEnd;
+    });
   };
 
-  const getAutoAssignedBesas = (bookingDate: string, bookingTime: string) => {
+  const getAutoAssignedBesas = (bookingDate: string, bookingTime: string, durationMinutes = 0) => {
     if (!bookingDate || !bookingTime) return [];
     return besas
-      .filter((besa) => besa.status === "active" && isBesaAvailable(besa, bookingDate, bookingTime))
+      .filter((besa) => besa.status === "active" && isBesaAvailable(besa, bookingDate, bookingTime, durationMinutes))
       .map((besa) => besa.name);
   };
 
@@ -755,12 +765,17 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
         location: selected.location || "Not specified",
       };
 
-      const autoAssignedBesas = getAutoAssignedBesas(updatedBookingData.date, updatedBookingData.startTime);
+      const autoAssignedBesas = getAutoAssignedBesas(
+        updatedBookingData.date,
+        updatedBookingData.startTime,
+        durationMins
+      );
 
       const bookingPayload = {
         ...updatedBookingData,
         besas: autoAssignedBesas,
         accommodations: updatedBookingData.accommodations || (updatedBookingData as any).accommodations || "",
+        largeTourDetails: updatedBookingData.largeTourDetails || "",
         id: bookingId,
         createdAt: new Date().toISOString(),
       };
@@ -1237,17 +1252,26 @@ const renderSection2 = () => {
         const weekly = selected.weeklyHours?.[dayOfWeek];
         console.log("Weekly hours for", dayOfWeek, ":", weekly);
         
-        if (weekly && weekly.length > 0) {
-          allTimeSlots = weekly.flatMap((slot) =>
-            generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
-          );
-          console.log("Generated time slots:", allTimeSlots);
-        }
+      if (weekly && weekly.length > 0) {
+        allTimeSlots = weekly.flatMap((slot) =>
+          generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
+        );
+        console.log("Generated time slots:", allTimeSlots);
       }
-      
-      const availableSlots = allTimeSlots.filter(time => 
-        !isTimeSlotFull(time) && isTimeSlotValid(time)
+    }
+    
+    const hasCoverage = (time: string) => {
+      // require at least one active BESA whose office hours cover the entire tour duration
+      return besas.some(
+        (besa) =>
+          besa.status === "active" &&
+          isBesaAvailable(besa, date, time, durationMins)
       );
+    };
+
+    const availableSlots = allTimeSlots.filter(time => 
+      hasCoverage(time) && !isTimeSlotFull(time) && isTimeSlotValid(time)
+    );
       console.log("Available (non-full, valid notice) slots:", availableSlots);
       
       return availableSlots;
@@ -1397,6 +1421,12 @@ const renderSection3 = () => {
     updateBookingData("interests", updatedInterests);
   };
 
+  const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
+  const largeDetailsEnabled = selectedTourData?.intakeForm?.largeTourDetailsEnabled;
+  const largeDetailsLabel =
+    selectedTourData?.intakeForm?.largeTourDetailsLabel ||
+    "Please share details about your large in-person group (size, needs, schedule).";
+
   return (
     <div className="space-y-8">
       <div className="text-center mb-8">
@@ -1512,6 +1542,21 @@ const renderSection3 = () => {
             {errors.role && <p className="text-red-500 text-sm mt-1">{errors.role}</p>}
           </div>
         </div>
+
+        {largeDetailsEnabled && (
+          <div className="border-t border-gray-200 pt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {largeDetailsLabel}
+            </label>
+            <textarea
+              value={bookingData.largeTourDetails || ""}
+              onChange={(e) => updateBookingData("largeTourDetails", e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+              placeholder="Share group size, schedule constraints, accessibility needs, etc."
+            />
+          </div>
+        )}
 
         {/* Major Interests Section */}
         <div className="border-t border-gray-200 pt-6">

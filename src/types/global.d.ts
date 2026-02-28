@@ -75,6 +75,8 @@ declare global {
             phone: boolean;
             attendeeCount: boolean;
             majorsInterested: boolean;
+            largeTourDetailsEnabled?: boolean;
+            largeTourDetailsLabel?: string;
             // Add other standard fields as needed
             customQuestions: Array<{
             question: string;
@@ -149,6 +151,7 @@ declare global {
         leadGuide?: string,
         notes?: string,
         modificationReason?: string,
+        largeTourDetails?: string;
     }
     
 

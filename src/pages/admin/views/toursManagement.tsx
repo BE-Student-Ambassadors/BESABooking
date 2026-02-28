@@ -45,6 +45,8 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
       phone: false,
       attendeeCount: true,
       majorsInterested: false,
+      largeTourDetailsEnabled: false,
+      largeTourDetailsLabel: 'Please share details about your large in-person group (size, schedule needs, accessibility, etc.)',
       customQuestions: []
     },
     reminderEmails: [{ timing: 24, unit: 'hours' }],
@@ -668,6 +670,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
       );
 
     case 5:
+      const isLargeInPersonTour = tour.title.toLowerCase().includes('large') && tour.title.toLowerCase().includes('person');
       return (
         <div className="space-y-4 2xl:space-y-6">
           <div>
@@ -698,6 +701,56 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               ))}
             </div>
           </div>
+
+          {isLargeInPersonTour && (
+            <div className="border-t pt-4 2xl:pt-6">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h4 className="text-sm 2xl:text-base font-medium text-gray-900">Large In-Person Tour Details</h4>
+                  <p className="text-xs 2xl:text-sm text-gray-600">
+                    Add an open-ended question so requesters can share specifics about their large group.
+                  </p>
+                </div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={tour.intakeForm.largeTourDetailsEnabled ?? false}
+                    onChange={(e) =>
+                      updateTour({
+                        intakeForm: {
+                          ...tour.intakeForm,
+                          largeTourDetailsEnabled: e.target.checked
+                        }
+                      })
+                    }
+                  />
+                  <span className="text-xs 2xl:text-sm text-gray-700">Enable question</span>
+                </label>
+              </div>
+
+              {tour.intakeForm.largeTourDetailsEnabled && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Prompt shown on the intake form
+                  </label>
+                  <textarea
+                    className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
+                    rows={2}
+                    value={tour.intakeForm.largeTourDetailsLabel || ''}
+                    onChange={(e) =>
+                      updateTour({
+                        intakeForm: {
+                          ...tour.intakeForm,
+                          largeTourDetailsLabel: e.target.value
+                        }
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="border-t pt-4 2xl:pt-6">
             <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 2xl:gap-0 mb-3 2xl:mb-4">

@@ -623,6 +623,11 @@ export default function DashboardView() {
                     Accommodations: {viewingBooking.accommodations}
                   </p>
                 )}
+                {viewingBooking.largeTourDetails && viewingBooking.largeTourDetails.trim() !== '' && (
+                  <p className="text-gray-700 mt-1">
+                    Large Tour Details: {viewingBooking.largeTourDetails}
+                  </p>
+                )}
                 {viewingBooking.modificationReason && (
                   <p className="text-gray-700 mt-1">
                     Reschedule/Cancellation Reason: {viewingBooking.modificationReason}
