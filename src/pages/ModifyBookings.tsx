@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, query, where, limit } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
-import { ArrowLeft, Calendar, Clock, Check, Search, Loader2, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, Search, Loader2, Trash2, Save } from "lucide-react";
 
 type BookingDoc = {
   tourId?: string;
@@ -195,7 +195,7 @@ const ModifyBookingsPage: React.FC = () => {
     };
 
     const isDateBlocked = (dt: Date, t: Tour) => {
-      const iso = dt.toISOString().split("T")[0];
+      // const iso = dt.toISOString().split("T")[0];
       const blocked = (t.dateSpecificBlockDays || []).find(d => {
         const start = new Date(d.startDate + "T00:00:00");
         const end = new Date((d.endDate || d.startDate) + "T23:59:59");
