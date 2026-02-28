@@ -356,6 +356,17 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   };
   
   const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
+
+  // Keep calendar view in sync with selected date (prevents jumping back to today)
+  useEffect(() => {
+    if (!selectedDate) return;
+    const [y, m] = selectedDate.split('-').map(Number);
+    if (!y || !m) return;
+    const target = new Date(y, (m ?? 1) - 1, 1);
+    if (target.getMonth() !== currentMonth.getMonth() || target.getFullYear() !== currentMonth.getFullYear()) {
+      setCurrentMonth(target);
+    }
+  }, [selectedDate, currentMonth]);
   
   const previousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
@@ -413,7 +424,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   }
   
   return (
-    <div className="border-2 border-blue-500 rounded-xl p-6 bg-white shadow-lg">
+    <div className="border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
       {/* Calendar Header */}
       <div className="flex items-center justify-between mb-6">
         <button
@@ -423,9 +434,11 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
-        <h3 className="text-xl font-bold text-blue-600">
-          {monthNames[month]} {year}
-        </h3>
+        <div className="flex flex-col items-center gap-1">
+          <h3 className="text-xl font-bold text-blue-600">
+            {monthNames[month]} {year}
+          </h3>
+        </div>
         <button
           onClick={nextMonth}
           className="p-2 hover:bg-blue-500 hover:text-white rounded-lg transition-all text-blue-600"
@@ -438,7 +451,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       {/* Day Names */}
       <div className="grid grid-cols-7 gap-2 mb-3">
         {dayNames.map(day => (
-          <div key={day} className="text-center text-sm font-bold text-blue-700 py-2">
+          <div key={day} className="text-center text-sm font-semibold text-blue-700 py-2">
             {day}
           </div>
         ))}
@@ -462,13 +475,13 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
               onClick={() => !isDisabled && onDateSelect(dateStr)}
               disabled={isDisabled}
               className={`
-                aspect-square p-2 rounded-lg text-sm font-semibold transition-all
+                aspect-square p-3 rounded-lg text-sm font-semibold transition-all
                 ${isSelected 
                   ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500' 
                   : ''
                 }
                 ${!isSelected && !isDisabled 
-                  ? 'bg-blue-50 hover:bg-blue-100 text-gray-800 border-2 border-blue-200 hover:border-blue-400' 
+                  ? 'bg-blue-50 hover:bg-blue-100 text-gray-800 border border-blue-200 hover:border-blue-400' 
                   : ''
                 }
                 ${isDisabled 
