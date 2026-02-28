@@ -1387,13 +1387,13 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
           await updateDoc(doc(db, 'Tours', tour.tourId), { dateSpecificBlockDays: updated });
         })
       );
-      setTours((prev) =>
-        prev.map((tour) => ({
+      setTours((prev: Tour[]) =>
+        prev.map((tour: Tour) => ({
           ...tour,
           dateSpecificBlockDays: [
             ...(tour.dateSpecificBlockDays || []),
             ...(tour.dateSpecificBlockDays || []).some(
-              (d) =>
+              (d: any) =>
                 d.appliesToAllTours &&
                 d.unavailable &&
                 d.startDate === newOverride.startDate &&
@@ -1428,11 +1428,11 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
           await updateDoc(doc(db, 'Tours', tour.tourId), { dateSpecificBlockDays: filtered });
         })
       );
-      setTours((prev) =>
-        prev.map((tour) => ({
+      setTours(prev =>
+        prev.map((tour: Tour) => ({
           ...tour,
           dateSpecificBlockDays: (tour.dateSpecificBlockDays || []).filter(
-            (d) =>
+            (d: any) =>
               !(
                 d.appliesToAllTours &&
                 d.unavailable &&
@@ -1693,12 +1693,12 @@ export default function ToursManagement() {
   const handleSaveTour = (tour: Tour) => {
     if (editingTour) {
       // Update existing tour
-      setTours(prevTours => 
-        prevTours.map(t => t.tourId === tour.tourId ? tour : t)
+      setTours((prevTours: Tour[]) => 
+        prevTours.map((t: Tour) => t.tourId === tour.tourId ? tour : t)
       );
     } else {
       // Add new tour
-      setTours(prevTours => [...prevTours, { ...tour, displayOrder: prevTours.length }]);
+      setTours((prevTours: Tour[]) => [...prevTours, { ...tour, displayOrder: prevTours.length }]);
     }
     setEditingTour(undefined);
   };
