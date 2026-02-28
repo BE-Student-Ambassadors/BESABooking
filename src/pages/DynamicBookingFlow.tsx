@@ -11,6 +11,7 @@ type BookingRecord = {
   date?: string;
   time?: string;
   startTime?: string;
+  endTime?: string;
 };
 
 interface BookingData {
@@ -1226,6 +1227,36 @@ const renderSection2 = () => {
       return bookingCount >= maxBookings;
     };
 
+    const getMinutesFromLabel = (label?: string): number | null => {
+      if (!label) return null;
+      const t24 = parseTime12Hour(label) || label; // allow already-24h strings
+      if (!t24.includes(':')) return null;
+      return toMinutes(t24);
+    };
+
+    // Block slots if another tour type overlaps the selected slot window
+    const hasCrossTourConflict = (date: string, time: string): boolean => {
+      const candidateStart = getMinutesFromLabel(time);
+      if (candidateStart === null) return false;
+      const candidateEnd = candidateStart + durationMins;
+
+      return bookings.some((booking) => {
+        if (booking.date !== date) return false;
+        if (!booking.time && !booking.startTime) return false;
+        const bookingLabel = booking.time || booking.startTime;
+        const bookingStart = getMinutesFromLabel(bookingLabel);
+        if (bookingStart === null) return false;
+
+        // Prefer explicit end time; otherwise assume 60-minute block
+        const bookingEnd =
+          getMinutesFromLabel(booking.endTime) ??
+          bookingStart + 60;
+
+        const overlaps = candidateStart < bookingEnd && bookingStart < candidateEnd;
+        return booking.tourId !== selected.tourId && overlaps;
+      });
+    };
+
     const getAvailableTimes = () => {
       const date = bookingData.date;
       if (!date) return [];
@@ -1270,7 +1301,10 @@ const renderSection2 = () => {
     };
 
     const availableSlots = allTimeSlots.filter(time => 
-      hasCoverage(time) && !isTimeSlotFull(time) && isTimeSlotValid(time)
+      hasCoverage(time) &&
+      !isTimeSlotFull(time) &&
+      isTimeSlotValid(time) &&
+      !hasCrossTourConflict(date, time)
     );
       console.log("Available (non-full, valid notice) slots:", availableSlots);
       
