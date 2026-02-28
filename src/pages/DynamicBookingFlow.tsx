@@ -539,7 +539,7 @@ const isDateInRange = (dateStr: string, start?: string, end?: string): boolean =
   return date >= startDate && date <= endDate;
 };
 
-  const findDateOverride = (dateStr: string, tour: Tour) =>
+const findDateOverride = (dateStr: string, tour: Tour) =>
   tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
 
 const getBookingTime = (booking: BookingRecord): string | undefined =>
@@ -613,6 +613,13 @@ const toDateOnly = (value: any): Date | null => {
   return null;
 };
 
+const isDateWithinOverride = (dateStr: string, start: string, end?: string) => {
+  const d = new Date(dateStr + "T00:00:00");
+  const s = new Date(start + "T00:00:00");
+  const e = new Date((end || start) + "T23:59:59");
+  return d >= s && d <= e;
+};
+
 const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; reason?: string } => {
   if (!dateString) {
     return { available: false, reason: "Please select a date" };
@@ -625,6 +632,16 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   // Check if date is in the past
   if (selectedDate < today) {
     return { available: false, reason: "Cannot book past dates" };
+  }
+
+  // Global holiday blocks (appliesToAllTours)
+  const globallyBlocked = tours.some((t) =>
+    (t.dateSpecificBlockDays || []).some(
+      (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateString, d.startDate, d.endDate)
+    )
+  );
+  if (globallyBlocked) {
+    return { available: false, reason: "This date is blocked for all tours (holiday/closure)." };
   }
 
   // Respect tour start/end window
@@ -963,6 +980,14 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   // Helper to check if a date has any available time slots
   const hasAvailableTimeSlots = (dateStr: string): boolean => {
     if (!selectedTourData) return false;
+    
+    // Block immediately if globally unavailable
+    const globallyBlocked = tours.some((t) =>
+      (t.dateSpecificBlockDays || []).some(
+        (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateStr, d.startDate, d.endDate)
+      )
+    );
+    if (globallyBlocked) return false;
     
     const now = new Date();
     const minDateTime = new Date(now);

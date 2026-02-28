@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, Bell, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
@@ -416,7 +416,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
         updateTour({
           dateSpecificBlockDays: [
             ...(tour.dateSpecificBlockDays || []),
-            { startDate: '', endDate: '', slots: [], unavailable: true }
+            { startDate: '', endDate: '', slots: [], unavailable: true, appliesToAllTours: true }
           ]
         });
       }}
@@ -473,6 +473,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                 newDateSpecific[index] = { 
                   ...dateOverride, 
                   unavailable: e.target.checked,
+                  appliesToAllTours: e.target.checked, // holiday means universal
                   slots: e.target.checked ? [] : dateOverride.slots
                 };
                 updateTour({ dateSpecificBlockDays: newDateSpecific });
@@ -481,6 +482,30 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             />
             <span className="text-sm text-gray-700">Mark as unavailable (holiday/closed)</span>
           </label>
+
+          {dateOverride.unavailable && (
+            <div className="mt-2 flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                  newDateSpecific[index] = {
+                    ...dateOverride,
+                    appliesToAllTours: !(dateOverride.appliesToAllTours ?? true)
+                  };
+                  updateTour({ dateSpecificBlockDays: newDateSpecific });
+                }}
+                className={`px-2 py-1 rounded-lg text-xs font-medium ${
+                  dateOverride.appliesToAllTours
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {dateOverride.appliesToAllTours ? 'Universal: ON' : 'Universal: OFF'}
+              </button>
+              <span className="text-xs text-gray-600">Applies to all tours</span>
+            </div>
+          )}
         </div>
 
         {!dateOverride.unavailable && (
@@ -1189,6 +1214,10 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   const [searchTerm] = useState('');
   const [filterStatus] = useState<'all' | 'published' | 'draft'>('all');
   const [reordering, setReordering] = useState(false);
+  const [globalHolidayForm, setGlobalHolidayForm] = useState<{ startDate: string; endDate: string }>({
+    startDate: '',
+    endDate: ''
+  });
 
   const sortByDisplayOrder = (a: Tour, b: Tour) =>
     (a.displayOrder ?? Number.MAX_SAFE_INTEGER) - (b.displayOrder ?? Number.MAX_SAFE_INTEGER);
@@ -1315,6 +1344,110 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
 
   const orderedFilteredTours = [...filteredTours].sort(sortByDisplayOrder);
 
+  const universalOverrides = useMemo(() => {
+    const map: Record<string, { startDate: string; endDate?: string }> = {};
+    tours.forEach((tour) => {
+      (tour.dateSpecificBlockDays || []).forEach((d) => {
+        if (d.appliesToAllTours && d.unavailable) {
+          const key = `${d.startDate}|${d.endDate || d.startDate}`;
+          map[key] = { startDate: d.startDate, endDate: d.endDate };
+        }
+      });
+    });
+    return Object.values(map).sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+  }, [tours]);
+
+  const addUniversalHoliday = async () => {
+    if (!globalHolidayForm.startDate) {
+      alert('Please select a start date');
+      return;
+    }
+    const newOverride = {
+      startDate: globalHolidayForm.startDate,
+      endDate: globalHolidayForm.endDate || globalHolidayForm.startDate,
+      slots: [],
+      unavailable: true,
+      appliesToAllTours: true,
+    };
+
+    try {
+      await Promise.all(
+        tours.map(async (tour) => {
+          if (!tour.tourId) return;
+          const existing = tour.dateSpecificBlockDays || [];
+          const exists = existing.some(
+            (d) =>
+              d.appliesToAllTours &&
+              d.unavailable &&
+              d.startDate === newOverride.startDate &&
+              (d.endDate || d.startDate) === (newOverride.endDate || newOverride.startDate)
+          );
+          if (exists) return;
+          const updated = [...existing, newOverride];
+          await updateDoc(doc(db, 'Tours', tour.tourId), { dateSpecificBlockDays: updated });
+        })
+      );
+      setTours((prev) =>
+        prev.map((tour) => ({
+          ...tour,
+          dateSpecificBlockDays: [
+            ...(tour.dateSpecificBlockDays || []),
+            ...(tour.dateSpecificBlockDays || []).some(
+              (d) =>
+                d.appliesToAllTours &&
+                d.unavailable &&
+                d.startDate === newOverride.startDate &&
+                (d.endDate || d.startDate) === (newOverride.endDate || newOverride.startDate)
+            )
+              ? []
+              : [newOverride],
+          ],
+        }))
+      );
+      setGlobalHolidayForm({ startDate: '', endDate: '' });
+    } catch (err) {
+      console.error('Error adding universal holiday:', err);
+      alert('Failed to add universal holiday date.');
+    }
+  };
+
+  const removeUniversalHoliday = async (startDate: string, endDate?: string) => {
+    try {
+      await Promise.all(
+        tours.map(async (tour) => {
+          if (!tour.tourId) return;
+          const filtered = (tour.dateSpecificBlockDays || []).filter(
+            (d) =>
+              !(
+                d.appliesToAllTours &&
+                d.unavailable &&
+                d.startDate === startDate &&
+                (d.endDate || d.startDate) === (endDate || startDate)
+              )
+          );
+          await updateDoc(doc(db, 'Tours', tour.tourId), { dateSpecificBlockDays: filtered });
+        })
+      );
+      setTours((prev) =>
+        prev.map((tour) => ({
+          ...tour,
+          dateSpecificBlockDays: (tour.dateSpecificBlockDays || []).filter(
+            (d) =>
+              !(
+                d.appliesToAllTours &&
+                d.unavailable &&
+                d.startDate === startDate &&
+                (d.endDate || d.startDate) === (endDate || startDate)
+              )
+          ),
+        }))
+      );
+    } catch (err) {
+      console.error('Error removing universal holiday:', err);
+      alert('Failed to remove universal holiday.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -1336,156 +1469,206 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
         </div>
       </div>
 
-      {/* Stats Overview */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* Tours List */}
-        <div className="space-y-4">
-          {orderedFilteredTours.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No tours found</h3>
-              <p className="text-gray-600 mb-6">
-                {searchTerm || filterStatus !== 'all' 
-                  ? 'Try adjusting your search or filters'
-                  : 'Get started by creating your first tour'
-                }
-              </p>
-              {!searchTerm && filterStatus === 'all' && (
-                <button
-                  onClick={onCreateTour}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                >
-                  Create Your First Tour
-                </button>
-              )}
-            </div>
-          ) : (
-            orderedFilteredTours.map((tour, idx) => (
-              <div key={tour.tourId} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-xl font-semibold text-gray-900">{tour.title}</h3>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        tour.published 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {tour.published ? 'Published' : 'Draft'}
-                      </span>
-                    </div>
-                    
-                    <p className="text-gray-600 mb-4 line-clamp-2">{tour.description}</p>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <Clock className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600">{tour.duration} {tour.durationUnit}</span>
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            {orderedFilteredTours.length === 0 ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No tours found</h3>
+                <p className="text-gray-600 mb-6">
+                  {searchTerm || filterStatus !== 'all' 
+                    ? 'Try adjusting your search or filters'
+                    : 'Get started by creating your first tour'
+                  }
+                </p>
+                {!searchTerm && filterStatus === 'all' && (
+                  <button
+                    onClick={onCreateTour}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    Create Your First Tour
+                  </button>
+                )}
+              </div>
+            ) : (
+              orderedFilteredTours.map((tour, idx) => (
+                <div key={tour.tourId} className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-xl font-semibold text-gray-900">{tour.title}</h3>
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          tour.published 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {tour.published ? 'Published' : 'Draft'}
+                        </span>
                       </div>
                       
-                      <div className="flex items-center space-x-2">
-                        <Users className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600">Max: {tour.maxAttendeesPerBooking} People Per Session</span>
-                      </div>
+                      <p className="text-gray-600 mb-4 line-clamp-2">{tour.description}</p>
                       
-                      <div className="flex items-center space-x-2">
-                        {getLocationDisplay(tour) === 'Virtual' ? (
-                          <Video className="h-4 w-4 text-gray-400" />
-                        ) : getLocationDisplay(tour) === 'Hybrid' ? (
-                          <Globe className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <MapPin className="h-4 w-4 text-gray-400" />
-                        )}
-                        <span className="text-gray-600">{getLocationDisplay(tour)}</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 truncate">{getDateRange(tour)}</span>
-                      </div>
-                    </div>
-                    
-                    {tour.published && (
-                      <div className="flex items-center space-x-6 mt-4 pt-4 border-t border-gray-100">
-                        {/* <div className="text-sm">
-                          <span className="text-gray-600">Upcoming: </span>
-                          <span className="font-medium text-blue-600">{tour.upcomingBookings || 0}</span>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="flex items-center space-x-2">
+                          <Clock className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-600">{tour.duration} {tour.durationUnit}</span>
                         </div>
-                        <div className="text-sm">
-                          <span className="text-gray-600">Total Bookings: </span>
-                          <span className="font-medium text-gray-900">{tour.totalBookings || 0}</span>
-                        </div> */}
+                        
+                        <div className="flex items-center space-x-2">
+                          <Users className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-600">Max: {tour.maxAttendeesPerBooking} People Per Session</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          {getLocationDisplay(tour) === 'Virtual' ? (
+                            <Video className="h-4 w-4 text-gray-400" />
+                          ) : getLocationDisplay(tour) === 'Hybrid' ? (
+                            <Globe className="h-4 w-4 text-gray-400" />
+                          ) : (
+                            <MapPin className="h-4 w-4 text-gray-400" />
+                          )}
+                          <span className="text-gray-600">{getLocationDisplay(tour)}</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-600 truncate">{getDateRange(tour)}</span>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex w-full sm:w-auto items-center sm:items-start justify-between sm:justify-end gap-3 sm:gap-2">
-                    <div className="flex sm:flex-col gap-1 sm:mr-2">
+                      
+                      {tour.published && (
+                        <div className="flex items-center space-x-6 mt-4 pt-4 border-t border-gray-100">
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex w-full sm:w-auto items-center sm:items-start justify-between sm:justify-end gap-3 sm:gap-2">
+                      <div className="flex sm:flex-col gap-1 sm:mr-2">
+                        <button
+                          onClick={() => moveTour(tour.tourId, 'up')}
+                          disabled={reordering || idx === 0}
+                          className={`flex items-center justify-center px-3 py-2 sm:p-1 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 ${idx === 0 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          title="Move up"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                          <span className="ml-2 text-xs sm:hidden">Up</span>
+                        </button>
+                        <button
+                          onClick={() => moveTour(tour.tourId, 'down')}
+                          disabled={reordering || idx === orderedFilteredTours.length - 1}
+                          className={`flex items-center justify-center px-3 py-2 sm:p-1 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 ${idx === orderedFilteredTours.length - 1 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          title="Move down"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                          <span className="ml-2 text-xs sm:hidden">Down</span>
+                        </button>
+                      </div>
+                      
                       <button
-                        onClick={() => moveTour(tour.tourId, 'up')}
-                        disabled={reordering || idx === 0}
-                        className={`flex items-center justify-center px-3 py-2 sm:p-1 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 ${idx === 0 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
-                        title="Move up"
+                        onClick={() => onEditTour(tour)}
+                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                        title="Edit Tour"
                       >
-                        <ArrowUp className="h-4 w-4" />
-                        <span className="ml-2 text-xs sm:hidden">Up</span>
+                        <Edit3 className="h-4 w-4" />
                       </button>
+                      
                       <button
-                        onClick={() => moveTour(tour.tourId, 'down')}
-                        disabled={reordering || idx === orderedFilteredTours.length - 1}
-                        className={`flex items-center justify-center px-3 py-2 sm:p-1 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 ${idx === orderedFilteredTours.length - 1 || reordering ? 'opacity-40 cursor-not-allowed' : ''}`}
-                        title="Move down"
+                        onClick={() => handleTogglePublish(tour.tourId!)}
+                        className={`p-2 rounded-lg ${
+                          tour.published
+                            ? 'text-gray-400 hover:text-yellow-600 hover:bg-yellow-50'
+                            : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                        }`}
+                        title={tour.published ? 'Unpublish Tour' : 'Publish Tour'}
                       >
-                        <ArrowDown className="h-4 w-4" />
-                        <span className="ml-2 text-xs sm:hidden">Down</span>
+                        {tour.published ? (
+                          <Eye className="h-4 w-4" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={() => handleDeleteTour(tour.tourId!)}
+                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                        title="Delete Tour"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-
-                    {/* <button
-                      onClick={() => alert(`Viewing tour: ${tour.title}`)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                      title="View Tour"
-                    >
-                    <Eye className="h-4 w-4" />
-                    </button> */}
-                    
-                    <button
-                      onClick={() => onEditTour(tour)}
-                      className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                      title="Edit Tour"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </button>
-                    
-                    <button
-                      onClick={() => handleTogglePublish(tour.tourId!)}
-                      className={`p-2 rounded-lg ${
-                        tour.published
-                          ? 'text-gray-400 hover:text-yellow-600 hover:bg-yellow-50'
-                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
-                      }`}
-                      title={tour.published ? 'Unpublish Tour' : 'Publish Tour'}
-                    >
-                      {tour.published ? (
-                        <Eye className="h-4 w-4" />
-                      ) : (
-                        <CheckCircle className="h-4 w-4" />
-                      )}
-                    </button>
-                    
-                    <button
-                      onClick={() => handleDeleteTour(tour.tourId!)}
-                      className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                      title="Delete Tour"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
                 </div>
+              ))
+            )}
+          </div>
+
+          {/* Universal Holidays Sidebar */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-600" />
+                Universal Holiday Dates
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Dates marked as unavailable for all tours.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  value={globalHolidayForm.startDate}
+                  onChange={(e) =>
+                    setGlobalHolidayForm((prev) => ({ ...prev, startDate: e.target.value }))
+                  }
+                />
+                <label className="block text-sm font-medium text-gray-700">End Date (optional)</label>
+                <input
+                  type="date"
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  value={globalHolidayForm.endDate}
+                  onChange={(e) =>
+                    setGlobalHolidayForm((prev) => ({ ...prev, endDate: e.target.value }))
+                  }
+                />
+                <button
+                  onClick={addUniversalHoliday}
+                  className="w-full mt-2 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Add Universal Holiday
+                </button>
               </div>
-            ))
-          )}
+
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold text-gray-800 mb-2">Existing dates</h4>
+                {universalOverrides.length === 0 ? (
+                  <p className="text-sm text-gray-500">None set yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {universalOverrides.map((d) => (
+                      <div
+                        key={`${d.startDate}|${d.endDate || d.startDate}`}
+                        className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <span className="text-gray-800">
+                          {d.startDate}
+                          {d.endDate && d.endDate !== d.startDate ? ` → ${d.endDate}` : ''}
+                        </span>
+                        <button
+                          onClick={() => removeUniversalHoliday(d.startDate, d.endDate)}
+                          className="text-red-600 hover:text-red-800 text-xs"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

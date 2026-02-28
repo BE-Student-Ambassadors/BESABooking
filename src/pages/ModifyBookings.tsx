@@ -194,14 +194,26 @@ const ModifyBookingsPage: React.FC = () => {
       return mins;
     };
 
-    const isDateBlocked = (dt: Date, t: Tour) => {
-      // const iso = dt.toISOString().split("T")[0];
+    const isDateBlocked = (dt: Date, t: Tour, allTours: Tour[] = []) => {
+      // tour-level blocks
       const blocked = (t.dateSpecificBlockDays || []).find(d => {
         const start = new Date(d.startDate + "T00:00:00");
         const end = new Date((d.endDate || d.startDate) + "T23:59:59");
         return dt >= start && dt <= end;
       });
       if (blocked?.unavailable) return true;
+
+      // global holiday blocks
+      const globalHit = allTours.some((tour) =>
+        (tour.dateSpecificBlockDays || []).some((d) => {
+          if (!d.appliesToAllTours || !d.unavailable) return false;
+          const start = new Date(d.startDate + "T00:00:00");
+          const end = new Date((d.endDate || d.startDate) + "T23:59:59");
+          return dt >= start && dt <= end;
+        })
+      );
+      if (globalHit) return true;
+
       if (blocked?.slots && blocked.slots.length) return false;
       return false;
     };

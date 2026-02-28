@@ -41,6 +41,7 @@ declare global {
             endDate?: string;
             slots: { start: string; end: string }[];
             unavailable: boolean;
+            appliesToAllTours?: boolean;
         }>;
 
         // Date Ranges when the tour is available   
