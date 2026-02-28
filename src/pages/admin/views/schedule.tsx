@@ -90,10 +90,20 @@ export default function ScheduleView() {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
-  const toMinutes = (time24: string | undefined) => {
-    if (!time24 || !time24.includes(':')) return Number.MAX_SAFE_INTEGER;
-    const [h, m] = time24.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
+  const toMinutes = (time: string | undefined) => {
+    if (!time) return Number.MAX_SAFE_INTEGER;
+    const ampmMatch = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (ampmMatch) {
+      let hour = parseInt(ampmMatch[1], 10) % 12;
+      if (ampmMatch[3].toUpperCase() === 'PM') hour += 12;
+      const minute = parseInt(ampmMatch[2], 10) || 0;
+      return hour * 60 + minute;
+    }
+    if (time.includes(':')) {
+      const [h, m] = time.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    }
+    return Number.MAX_SAFE_INTEGER;
   };
 
   // ---------- data fetch ----------
@@ -238,7 +248,26 @@ export default function ScheduleView() {
 
   // ---------- calendar: selected day + bookings ----------
   const selectedDateKey = ymdKey(selectedDate);
-  const filteredBookings = bookings.filter(b => b.date === selectedDateKey);
+  const bookingDateTimeValue = (booking: BookingData) => {
+    if (!booking?.date) return Number.MAX_SAFE_INTEGER;
+    const date = parseYMDLocal(booking.date);
+    const mins = toMinutes(booking.time);
+    if (mins !== Number.MAX_SAFE_INTEGER) {
+      date.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
+    }
+    return date.getTime();
+  };
+
+  const isBookingPast = (booking: BookingData) => bookingDateTimeValue(booking) < new Date().getTime();
+
+  const filteredBookings = useMemo(
+    () =>
+      bookings
+        .filter(b => b.date === selectedDateKey)
+        .slice()
+        .sort((a, b) => bookingDateTimeValue(a) - bookingDateTimeValue(b)),
+    [bookings, selectedDateKey]
+  );
 
   const selectedWeekday = format(selectedDate, 'EEEE').toLowerCase() as keyof Besa['officeHours'];
 
@@ -256,10 +285,11 @@ export default function ScheduleView() {
       return true; // 'all'
     });
 
-    // sort by date ASC, then time ASC
+    // sort by date/time ASC using real date math
     filtered.sort((a, b) => {
-      if (a.date !== b.date) return a.date.localeCompare(b.date);
-      return (a.time || '').localeCompare(b.time || '');
+      const dateDiff = bookingDateTimeValue(a) - bookingDateTimeValue(b);
+      if (dateDiff !== 0) return dateDiff;
+      return (a.tourType || '').localeCompare(b.tourType || '');
     });
 
     // group by booking.date ('YYYY-MM-DD')
@@ -378,11 +408,13 @@ export default function ScheduleView() {
               </h3>
               <div className="space-y-4">
                 {filteredBookings.length > 0 ? (
-                  filteredBookings.map(booking => (
-                    <div
-                      key={booking.bookingId ?? `${booking.tourId}-${booking.date}-${booking.time}`}
-                      className="border-l-4 border-blue-500 pl-4"
-                    >
+                  filteredBookings.map(booking => {
+                    const isPast = isBookingPast(booking);
+                    return (
+                      <div
+                        key={booking.bookingId ?? `${booking.tourId}-${booking.date}-${booking.time}`}
+                        className={`border-l-4 border-blue-500 pl-4 ${isPast ? 'opacity-60 bg-gray-50 rounded-lg' : ''}`}
+                      >
                       <div className="flex justify-between items-start">
                         <div>
                           <button
@@ -409,8 +441,9 @@ export default function ScheduleView() {
                           </span>
                         </div>
                       </div>
-                    </div>
-                  ))
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="text-gray-500">No tours scheduled.</p>
                 )}
@@ -502,17 +535,22 @@ export default function ScheduleView() {
               {Object.keys(groupedBookings).length > 0 ? (
                 Object.entries(groupedBookings).map(([dateKey, dayBookings]) => {
                   const dateObj = parseYMDLocal(dateKey);
+                  const sortedDayBookings = [...dayBookings].sort(
+                    (a, b) => bookingDateTimeValue(a) - bookingDateTimeValue(b)
+                  );
                   return (
                     <div key={dateKey} className="border-b border-gray-100 pb-4 last:border-b-0">
                       <h4 className="font-bold text-gray-900 mb-3">
                         {format(dateObj, 'MMMM d, yyyy')}
                       </h4>
                       <div className="space-y-3 ml-4">
-                        {dayBookings.map(booking => (
-                          <div
-                            key={booking.bookingId ?? `${booking.tourId}-${booking.date}-${booking.time}`}
-                            className="border border-gray-200 rounded-lg p-3"
-                          >
+                        {sortedDayBookings.map(booking => {
+                          const isPast = isBookingPast(booking);
+                          return (
+                            <div
+                              key={booking.bookingId ?? `${booking.tourId}-${booking.date}-${booking.time}`}
+                              className={`border border-gray-200 rounded-lg p-3 ${isPast ? 'opacity-60 bg-gray-50' : ''}`}
+                            >
                             <div className="flex justify-between items-start">
                               <div>
                                 <button
@@ -541,7 +579,8 @@ export default function ScheduleView() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );
