@@ -197,6 +197,23 @@ export default function DashboardView() {
     })
     .sort((a, b) => toDateTime(a.date, a.time || a.startTime).getTime() - toDateTime(b.date, b.time || b.startTime).getTime());
 
+  // Flag tours that have already occurred so we can gray them out visually
+  const isBookingPast = (booking: BookingData) => {
+    if (!booking?.date) return false;
+    const normalizedDate = normalizeDateKey(booking.date);
+    const hasTime = Boolean(booking.time || booking.startTime);
+
+    // If no time is provided, only mark as past when the calendar date has passed
+    if (!hasTime) {
+      const bookingDay = toDateTime(normalizedDate);
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return bookingDay.getTime() < todayStart.getTime();
+    }
+
+    const bookingDateTime = toDateTime(normalizedDate, booking.time || booking.startTime);
+    return bookingDateTime.getTime() < now.getTime();
+  };
+
   // Check if a booking time falls within a BESA's availability
   const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string) => {
     if (!bookingDate || !bookingTime) return false;
@@ -394,58 +411,64 @@ export default function DashboardView() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {futureBookings.map((booking) => (
-                <tr key={booking.bookingId} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    <button
-                      onClick={() => setViewingBooking(booking)}
-                      className="text-left text-blue-600 hover:text-blue-800 hover:underline"
-                    >
-                      {booking.tourType || 'Untitled Tour'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {booking.date}
-                    <div className="text-sm text-gray-500">{booking.time}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {booking.besas && booking.besas.length > 0 ? (
-                      <div className="space-y-1">
-                        {booking.besas.map((besa) => (
-                          <div
-                            key={`${booking.bookingId}-${besa}`}
-                            className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mr-1"
-                          >
-                            {besa}
-                          </div>
-                        ))}
+              {futureBookings.map((booking) => {
+                const isPast = isBookingPast(booking);
+                return (
+                  <tr
+                    key={booking.bookingId}
+                    className={`hover:bg-gray-50 ${isPast ? 'opacity-60 bg-gray-50' : ''}`}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <button
+                        onClick={() => setViewingBooking(booking)}
+                        className="text-left text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        {booking.tourType || 'Untitled Tour'}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {booking.date}
+                      <div className="text-sm text-gray-500">{booking.time}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {booking.besas && booking.besas.length > 0 ? (
+                        <div className="space-y-1">
+                          {booking.besas.map((besa) => (
+                            <div
+                              key={`${booking.bookingId}-${besa}`}
+                              className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mr-1"
+                            >
+                              {besa}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">None Assigned</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {booking.firstName} {booking.lastName}
+                      <div className="text-sm text-gray-500">{booking.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditClick(booking)}
+                          className="flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(booking)}
+                          className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
                       </div>
-                    ) : (
-                      <span className="text-gray-400 italic">None Assigned</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {booking.firstName} {booking.lastName}
-                    <div className="text-sm text-gray-500">{booking.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditClick(booking)}
-                        className="flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(booking)}
-                        className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {futureBookings.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">
@@ -459,67 +482,73 @@ export default function DashboardView() {
 
         {/* Mobile cards */}
         <div className="md:hidden divide-y divide-gray-100">
-          {futureBookings.map((booking) => (
-            <div key={booking.bookingId} className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <button
-                    onClick={() => setViewingBooking(booking)}
-                    className="text-base font-semibold text-blue-700 hover:text-blue-900"
-                  >
-                    {booking.tourType || 'Untitled Tour'}
-                  </button>
-                  <p className="text-sm text-gray-600">
-                    {booking.date}
-                    {booking.time && <span className="text-gray-500"> · {booking.time}</span>}
-                  </p>
+          {futureBookings.map((booking) => {
+            const isPast = isBookingPast(booking);
+            return (
+              <div
+                key={booking.bookingId}
+                className={`p-4 ${isPast ? 'opacity-60 bg-gray-50' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <button
+                      onClick={() => setViewingBooking(booking)}
+                      className="text-base font-semibold text-blue-700 hover:text-blue-900"
+                    >
+                      {booking.tourType || 'Untitled Tour'}
+                    </button>
+                    <p className="text-sm text-gray-600">
+                      {booking.date}
+                      {booking.time && <span className="text-gray-500"> · {booking.time}</span>}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEditClick(booking)}
+                      className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(booking)}
+                      className="p-2 bg-red-100 text-red-700 rounded-full"
+                      aria-label="Delete booking"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEditClick(booking)}
-                    className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(booking)}
-                    className="p-2 bg-red-100 text-red-700 rounded-full"
-                    aria-label="Delete booking"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
 
-              <div className="mt-3 space-y-2 text-sm text-gray-800">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 w-20">Contact</span>
-                  <span className="font-medium">{booking.firstName} {booking.lastName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 w-20">Email</span>
-                  <span className="text-gray-700 break-all">{booking.email || '—'}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-gray-500 w-20">BESAs</span>
-                  <div className="flex flex-wrap gap-2">
-                    {booking.besas && booking.besas.length > 0 ? (
-                      booking.besas.map((besa) => (
-                        <span
-                          key={`${booking.bookingId}-${besa}`}
-                          className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs"
-                        >
-                          {besa}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-gray-400 italic">None Assigned</span>
-                    )}
+                <div className="mt-3 space-y-2 text-sm text-gray-800">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 w-20">Contact</span>
+                    <span className="font-medium">{booking.firstName} {booking.lastName}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 w-20">Email</span>
+                    <span className="text-gray-700 break-all">{booking.email || '—'}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-gray-500 w-20">BESAs</span>
+                    <div className="flex flex-wrap gap-2">
+                      {booking.besas && booking.besas.length > 0 ? (
+                        booking.besas.map((besa) => (
+                          <span
+                            key={`${booking.bookingId}-${besa}`}
+                            className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs"
+                          >
+                            {besa}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-400 italic">None Assigned</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {futureBookings.length === 0 && (
             <div className="p-6 text-center text-sm text-gray-500">
