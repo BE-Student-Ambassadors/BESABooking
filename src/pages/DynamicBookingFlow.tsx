@@ -1082,6 +1082,10 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
         <p className="text-gray-600">Select the tour that best matches your interests and preferred date</p>
       </div>
 
+      <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 text-sm text-yellow-900">
+        More tours for April - June will be announced shortly. Please check back on March 23rd for new availability.
+      </div>
+
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Tours</h3>
         <div className="grid gap-6">
