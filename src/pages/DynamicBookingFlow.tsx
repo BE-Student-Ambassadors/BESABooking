@@ -1412,7 +1412,7 @@ const renderSection2 = () => {
                   >
                     <Clock className="w-5 h-5 mx-auto mb-2 text-gray-600" />
                     <span className="font-medium block">{time}</span>
-                    {remainingSpots <= 3 && (
+                    {remainingSpots <= 5 && (
                       <span className="text-xs text-orange-600 mt-1 block">
                         {remainingSpots} spot{remainingSpots !== 1 ? 's' : ''} left
                       </span>
@@ -1663,7 +1663,7 @@ const renderSection3 = () => {
 
       <div className="bg-gray-50 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-3">
-          accommodations & Special Requests
+          Accommodations & Special Requests
         </h3>
         <p className="text-sm text-gray-600 mb-3">
           Tell us about any accommodations we should prepare.
