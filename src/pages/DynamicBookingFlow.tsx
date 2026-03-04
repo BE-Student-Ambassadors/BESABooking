@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft} from "lucide-react";
+import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft } from "lucide-react";
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
-// import { getCalendarAccessToken, insertCalendarEvent } from "../calendarAPI.tsx";
-import api from "../api.ts";
+
+import api  from "../api";
 
 type BookingRecord = {
   tourId?: string;
@@ -41,9 +41,9 @@ interface BookingData {
   largeTourDetails?: string;
 }
 
-{/* Have calendar date show actual available dates (doesn't allow weekends, etc ) */}
-{/* Hide tours not selected*/}
-{/* Scheduling Rules: Show Date Ranges */}
+{/* Have calendar date show actual available dates (doesn't allow weekends, etc ) */ }
+{/* Hide tours not selected*/ }
+{/* Scheduling Rules: Show Date Ranges */ }
 
 interface DynamicBookingFormProps {
   onBack: () => void | Promise<void>;
@@ -102,70 +102,70 @@ function BookingPage() {
   const { tourId } = useParams<{ tourId: string }>();  // <-- must match route
 
   useEffect(() => {
-  const fetchTours = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "Tours"));
-      const toursData: Tour[] = querySnapshot.docs.map((d) => {
-        const data: any = d.data();
-        return {
-          tourId: d.id, // ← Changed from 'id' to 'tourId'
-          title: data.title ?? "",
-          description: data.description ?? "",
-          duration: data.duration ?? 0,
-          durationUnit: data.durationUnit ?? "minutes",
-          maxAttendeesPerBooking: data.maxAttendees ?? 5,
-          maxBookings: data.maxBookings ?? 3,
-          startDate: data.startDate, // ← Add this
-          endDate: data.endDate, // ← Add this
-          location: data.location ?? "",
-          zoomLink: data.zoomLink ?? "",
-          autoGenerateZoom: data.autoGenerateZoom ?? false,
-          weeklyHours: data.weeklyHours ?? {},
-          dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
-          dateSpecificDays: data.dateSpecificDays ?? [], // ← Add this
-          frequency: data.frequency ?? 1,
-          frequencyUnit: data.frequencyUnit ?? "hours",
-          registrationLimit: data.registrationLimit ?? 1,
-          minNotice: data.minNotice ?? 0,
-          minNoticeUnit: data.minNoticeUnit ?? "hours",
-          maxNotice: data.maxNotice ?? 1,
-          maxNoticeUnit: data.maxNoticeUnit ?? "days",
-          bufferTime: data.bufferTime ?? 0,
-          bufferUnit: data.bufferUnit ?? "minutes",
-          cancellationPolicy: data.cancellationPolicy ?? "",
-          reschedulingPolicy: data.reschedulingPolicy ?? "",
-          intakeForm: data.intakeForm ?? {
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: false,
-            attendeeCount: true,
-            majorsInterested: false,
-            largeTourDetailsEnabled: false,
-            largeTourDetailsLabel: 'Please share details about your large in-person group (size, needs, schedule).',
-            customQuestions: [],
-          },
-          reminderEmails: data.reminderEmails ?? [],
-          sessionInstructions: data.sessionInstructions ?? "",
-          published: data.published ?? false,
-          createdAt: data.createdAt ?? "",
-          upcomingBookings: data.upcomingBookings ?? 0,
-          totalBookings: data.totalBookings ?? 0,
-        } as Tour;
-      });
-      setTours(toursData);
-    } catch (error) {
-      console.error("Error fetching tours:", error);
-    }
-  };
-  fetchTours();
-}, []);
+    const fetchTours = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "Tours"));
+        const toursData: Tour[] = querySnapshot.docs.map((d) => {
+          const data: any = d.data();
+          return {
+            tourId: d.id, // ← Changed from 'id' to 'tourId'
+            title: data.title ?? "",
+            description: data.description ?? "",
+            duration: data.duration ?? 0,
+            durationUnit: data.durationUnit ?? "minutes",
+            maxAttendeesPerBooking: data.maxAttendees ?? 5,
+            maxBookings: data.maxBookings ?? 3,
+            startDate: data.startDate, // ← Add this
+            endDate: data.endDate, // ← Add this
+            location: data.location ?? "",
+            zoomLink: data.zoomLink ?? "",
+            autoGenerateZoom: data.autoGenerateZoom ?? false,
+            weeklyHours: data.weeklyHours ?? {},
+            dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
+            dateSpecificDays: data.dateSpecificDays ?? [], // ← Add this
+            frequency: data.frequency ?? 1,
+            frequencyUnit: data.frequencyUnit ?? "hours",
+            registrationLimit: data.registrationLimit ?? 1,
+            minNotice: data.minNotice ?? 0,
+            minNoticeUnit: data.minNoticeUnit ?? "hours",
+            maxNotice: data.maxNotice ?? 1,
+            maxNoticeUnit: data.maxNoticeUnit ?? "days",
+            bufferTime: data.bufferTime ?? 0,
+            bufferUnit: data.bufferUnit ?? "minutes",
+            cancellationPolicy: data.cancellationPolicy ?? "",
+            reschedulingPolicy: data.reschedulingPolicy ?? "",
+            intakeForm: data.intakeForm ?? {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: false,
+              attendeeCount: true,
+              majorsInterested: false,
+              largeTourDetailsEnabled: false,
+              largeTourDetailsLabel: 'Please share details about your large in-person group (size, needs, schedule).',
+              customQuestions: [],
+            },
+            reminderEmails: data.reminderEmails ?? [],
+            sessionInstructions: data.sessionInstructions ?? "",
+            published: data.published ?? false,
+            createdAt: data.createdAt ?? "",
+            upcomingBookings: data.upcomingBookings ?? 0,
+            totalBookings: data.totalBookings ?? 0,
+          } as Tour;
+        });
+        setTours(toursData);
+      } catch (error) {
+        console.error("Error fetching tours:", error);
+      }
+    };
+    fetchTours();
+  }, []);
 
   return (
     <DynamicBookingForm
       tours={tours}
       onBack={() => navigate("/")}
-      preselectedTour={tourId ?? ""} 
+      preselectedTour={tourId ?? ""}
       navigate={navigate}
     />
   );
@@ -261,10 +261,10 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
             available: !!(hours as any).available,
             timeSlots: Array.isArray((hours as any).timeSlots)
               ? (hours as any).timeSlots.map((slot: any) => ({
-                  id: typeof slot.id === "string" ? slot.id : Math.random().toString(36).substr(2, 9),
-                  start: typeof slot.start === "string" ? slot.start : "09:00",
-                  end: typeof slot.end === "string" ? slot.end : "17:00",
-                }))
+                id: typeof slot.id === "string" ? slot.id : Math.random().toString(36).substr(2, 9),
+                start: typeof slot.start === "string" ? slot.start : "09:00",
+                end: typeof slot.end === "string" ? slot.end : "17:00",
+              }))
               : [],
           };
         } else {
@@ -342,176 +342,176 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
   // Calendar Display for Section 1
   const CustomCalendar: React.FC<CustomCalendarProps> = ({ selectedDate, onDateSelect, tourData, isDateAvailable, minDate, maxDate }) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-    
-    return { daysInMonth, startingDayOfWeek, year, month };
-  };
-  
-  const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
+    const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // Keep calendar view in sync with selected date (prevents jumping back to today)
-  useEffect(() => {
-    if (!selectedDate) return;
-    const [y, m] = selectedDate.split('-').map(Number);
-    if (!y || !m) return;
-    const target = new Date(y, (m ?? 1) - 1, 1);
-    if (target.getMonth() !== currentMonth.getMonth() || target.getFullYear() !== currentMonth.getFullYear()) {
-      setCurrentMonth(target);
-    }
-  }, [selectedDate, currentMonth]);
-  
-  const previousMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
-  };
-  
-  const nextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
-  };
-  
-  const formatDateString = (year: number, month: number, day: number): string => {
-    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-  
-  const isDateDisabled = (day: number): boolean => {
-    const dateStr = formatDateString(year, month, day);
-    const dateObj = new Date(year, month, day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Disable past dates
-    if (dateObj < today) return true;
+    const getDaysInMonth = (date: Date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const daysInMonth = lastDay.getDate();
+      const startingDayOfWeek = firstDay.getDay();
 
-    // Respect tour-level min/max range if provided
-    if (minDate) {
-      const min = new Date(minDate);
-      min.setHours(0, 0, 0, 0);
-      if (dateObj < min) return true;
+      return { daysInMonth, startingDayOfWeek, year, month };
+    };
+
+    const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
+
+    // Keep calendar view in sync with selected date (prevents jumping back to today)
+    useEffect(() => {
+      if (!selectedDate) return;
+      const [y, m] = selectedDate.split('-').map(Number);
+      if (!y || !m) return;
+      const target = new Date(y, (m ?? 1) - 1, 1);
+      if (target.getMonth() !== currentMonth.getMonth() || target.getFullYear() !== currentMonth.getFullYear()) {
+        setCurrentMonth(target);
+      }
+    }, [selectedDate, currentMonth]);
+
+    const previousMonth = () => {
+      setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+    };
+
+    const nextMonth = () => {
+      setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+    };
+
+    const formatDateString = (year: number, month: number, day: number): string => {
+      return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    };
+
+    const isDateDisabled = (day: number): boolean => {
+      const dateStr = formatDateString(year, month, day);
+      const dateObj = new Date(year, month, day);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Disable past dates
+      if (dateObj < today) return true;
+
+      // Respect tour-level min/max range if provided
+      if (minDate) {
+        const min = new Date(minDate);
+        min.setHours(0, 0, 0, 0);
+        if (dateObj < min) return true;
+      }
+      if (maxDate) {
+        const max = new Date(maxDate);
+        max.setHours(23, 59, 59, 999);
+        if (dateObj > max) return true;
+      }
+
+      // If no tour selected, enable all future dates
+      if (!tourData) return false;
+
+      // Check availability using the provided function
+      const validation = isDateAvailable(dateStr, tourData);
+      return !validation.available;
+    };
+
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"];
+
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    // Create array of days to render
+    const days: (number | null)[] = [];
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
     }
-    if (maxDate) {
-      const max = new Date(maxDate);
-      max.setHours(23, 59, 59, 999);
-      if (dateObj > max) return true;
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(day);
     }
-    
-    // If no tour selected, enable all future dates
-    if (!tourData) return false;
-    
-    // Check availability using the provided function
-    const validation = isDateAvailable(dateStr, tourData);
-    return !validation.available;
-  };
-  
-  const monthNames = ["January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"];
-  
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  
-  // Create array of days to render
-  const days: (number | null)[] = [];
-  for (let i = 0; i < startingDayOfWeek; i++) {
-    days.push(null);
-  }
-  for (let day = 1; day <= daysInMonth; day++) {
-    days.push(day);
-  }
-  
-  return (
-    <div className="border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
-      {/* Calendar Header */}
-      <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={previousMonth}
-          className="p-2 hover:bg-blue-500 hover:text-white rounded-lg transition-all text-blue-600"
-          type="button"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <div className="flex flex-col items-center gap-1">
-          <h3 className="text-xl font-bold text-blue-600">
-            {monthNames[month]} {year}
-          </h3>
-        </div>
-        <button
-          onClick={nextMonth}
-          className="p-2 hover:bg-blue-500 hover:text-white rounded-lg transition-all text-blue-600"
-          type="button"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-      </div>
-      
-      {/* Day Names */}
-      <div className="grid grid-cols-7 gap-2 mb-3">
-        {dayNames.map(day => (
-          <div key={day} className="text-center text-sm font-semibold text-blue-700 py-2">
-            {day}
+
+    return (
+      <div className="border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
+        {/* Calendar Header */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={previousMonth}
+            className="p-2 hover:bg-blue-500 hover:text-white rounded-lg transition-all text-blue-600"
+            type="button"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div className="flex flex-col items-center gap-1">
+            <h3 className="text-xl font-bold text-blue-600">
+              {monthNames[month]} {year}
+            </h3>
           </div>
-        ))}
-      </div>
-      
-      {/* Calendar Days */}
-      <div className="grid grid-cols-7 gap-2">
-        {days.map((day, idx) => {
-          if (day === null) {
-            return <div key={`empty-${idx}`} className="aspect-square" />;
-          }
-          
-          const dateStr = formatDateString(year, month, day);
-          const isSelected = selectedDate === dateStr;
-          const isDisabled = isDateDisabled(day);
-          
-          return (
-            <button
-              key={day}
-              type="button"
-              onClick={() => !isDisabled && onDateSelect(dateStr)}
-              disabled={isDisabled}
-              className={`
-                aspect-square p-3 rounded-lg text-sm font-semibold transition-all
-                ${isSelected 
-                  ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500' 
-                  : ''
-                }
-                ${!isSelected && !isDisabled 
-                  ? 'bg-blue-50 hover:bg-blue-100 text-gray-800 border border-blue-200 hover:border-blue-400' 
-                  : ''
-                }
-                ${isDisabled 
-                  ? 'text-gray-300 cursor-not-allowed bg-gray-50 opacity-50' 
-                  : 'cursor-pointer'
-                }
-              `}
-            >
+          <button
+            onClick={nextMonth}
+            className="p-2 hover:bg-blue-500 hover:text-white rounded-lg transition-all text-blue-600"
+            type="button"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Day Names */}
+        <div className="grid grid-cols-7 gap-2 mb-3">
+          {dayNames.map(day => (
+            <div key={day} className="text-center text-sm font-semibold text-blue-700 py-2">
               {day}
-            </button>
-          );
-        })}
-      </div>
-      
-      {/* Legend */}
-      {tourData && (
-        <div className="mt-6 pt-4 border-t-2 border-blue-200 flex items-center justify-center gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-lg bg-blue-500 shadow-md ring-2 ring-blue-500"></div>
-            <span className="font-medium text-blue-800">Selected</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-lg bg-gray-50 border-2 border-gray-300"></div>
-            <span className="font-medium text-gray-600">Unavailable</span>
-          </div>
+            </div>
+          ))}
         </div>
-      )}
-    </div>
-  );
-};
+
+        {/* Calendar Days */}
+        <div className="grid grid-cols-7 gap-2">
+          {days.map((day, idx) => {
+            if (day === null) {
+              return <div key={`empty-${idx}`} className="aspect-square" />;
+            }
+
+            const dateStr = formatDateString(year, month, day);
+            const isSelected = selectedDate === dateStr;
+            const isDisabled = isDateDisabled(day);
+
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => !isDisabled && onDateSelect(dateStr)}
+                disabled={isDisabled}
+                className={`
+                aspect-square p-3 rounded-lg text-sm font-semibold transition-all
+                ${isSelected
+                    ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500'
+                    : ''
+                  }
+                ${!isSelected && !isDisabled
+                    ? 'bg-blue-50 hover:bg-blue-100 text-gray-800 border border-blue-200 hover:border-blue-400'
+                    : ''
+                  }
+                ${isDisabled
+                    ? 'text-gray-300 cursor-not-allowed bg-gray-50 opacity-50'
+                    : 'cursor-pointer'
+                  }
+              `}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        {tourData && (
+          <div className="mt-6 pt-4 border-t-2 border-blue-200 flex items-center justify-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-lg bg-blue-500 shadow-md ring-2 ring-blue-500"></div>
+              <span className="font-medium text-blue-800">Selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-lg bg-gray-50 border-2 border-gray-300"></div>
+              <span className="font-medium text-gray-600">Unavailable</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Preselect the tour from param once tours are loaded
   useEffect(() => {
@@ -520,7 +520,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     selectTourById(preselectedTour.trim());
   }, [preselectedTour, tours]);
 
-    // ---------- Helpers for Section 2 ----------
+  // ---------- Helpers for Section 2 ----------
   const toMinutes = (timeStr: string) => {
     const [hours, minutes] = timeStr.split(":").map(Number);
     return hours * 60 + minutes;
@@ -544,19 +544,19 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     return slots;
   };
 
-const isDateInRange = (dateStr: string, start?: string, end?: string): boolean => {
-  if (!start) return false;
-  const date = new Date(dateStr + "T00:00:00");
-  const startDate = new Date(start + "T00:00:00");
-  const endDate = end ? new Date(end + "T23:59:59") : new Date(start + "T23:59:59");
-  return date >= startDate && date <= endDate;
-};
+  const isDateInRange = (dateStr: string, start?: string, end?: string): boolean => {
+    if (!start) return false;
+    const date = new Date(dateStr + "T00:00:00");
+    const startDate = new Date(start + "T00:00:00");
+    const endDate = end ? new Date(end + "T23:59:59") : new Date(start + "T23:59:59");
+    return date >= startDate && date <= endDate;
+  };
 
-const findDateOverride = (dateStr: string, tour: Tour) =>
-  tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
+  const findDateOverride = (dateStr: string, tour: Tour) =>
+    tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
 
-const getBookingTime = (booking: BookingRecord): string | undefined =>
-  booking.startTime ?? booking.time;
+  const getBookingTime = (booking: BookingRecord): string | undefined =>
+    booking.startTime ?? booking.time;
 
   const parseTime12Hour = (time12: string) => {
     if (!time12) return "";
@@ -603,113 +603,124 @@ const getBookingTime = (booking: BookingRecord): string | undefined =>
       return slotStart <= bookingStartMins && bookingEndMins <= slotEnd;
     });
   };
-
-  const getAutoAssignedBesas = (bookingDate: string, bookingTime: string, durationMinutes = 0) => {
+  const getAutoAssignedBesas = (
+    bookingDate: string,
+    bookingTime: string,
+    durationMinutes = 0
+  ) => {
     if (!bookingDate || !bookingTime) return [];
+
     return besas
-      .filter((besa) => besa.status === "active" && isBesaAvailable(besa, bookingDate, bookingTime, durationMinutes))
-      .map((besa) => besa.name);
+      .filter(
+        (besa) =>
+          besa.status === "active" &&
+          isBesaAvailable(besa, bookingDate, bookingTime, durationMinutes)
+      )
+      .map((besa) => ({
+        name: besa.name,
+        email: besa.email,
+      }));
   };
 
-const toDateOnly = (value: any): Date | null => {
-  if (!value) return null;
-  if (typeof value === "string") {
-    const d = new Date(value + "T00:00:00");
-    return isNaN(d.getTime()) ? null : d;
-  }
-  if (value?.seconds) {
-    return new Date(value.seconds * 1000);
-  }
-  if (value instanceof Date) {
-    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-  }
-  return null;
-};
-
-const isDateWithinOverride = (dateStr: string, start: string, end?: string) => {
-  const d = new Date(dateStr + "T00:00:00");
-  const s = new Date(start + "T00:00:00");
-  const e = new Date((end || start) + "T23:59:59");
-  return d >= s && d <= e;
-};
-
-const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; reason?: string } => {
-  if (!dateString) {
-    return { available: false, reason: "Please select a date" };
-  }
-
-  const selectedDate = new Date(dateString + 'T00:00:00');
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  // Check if date is in the past
-  if (selectedDate < today) {
-    return { available: false, reason: "Cannot book past dates" };
-  }
-
-  // Global holiday blocks (appliesToAllTours)
-  const globallyBlocked = tours.some((t) =>
-    (t.dateSpecificBlockDays || []).some(
-      (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateString, d.startDate, d.endDate)
-    )
-  );
-  if (globallyBlocked) {
-    return { available: false, reason: "This date is blocked for all tours (holiday/closure)." };
-  }
-
-  // Respect tour start/end window
-  const tourStart = toDateOnly(tour.startDate);
-  const tourEnd = toDateOnly(tour.endDate);
-  if (tourStart) {
-    const start = new Date(tourStart);
-    start.setHours(0, 0, 0, 0);
-    if (selectedDate < start) {
-      return { available: false, reason: `Tour starts on ${start.toLocaleDateString()}` };
+  const toDateOnly = (value: any): Date | null => {
+    if (!value) return null;
+    if (typeof value === "string") {
+      const d = new Date(value + "T00:00:00");
+      return isNaN(d.getTime()) ? null : d;
     }
-  }
-  if (tourEnd) {
-    const end = new Date(tourEnd);
-    end.setHours(23, 59, 59, 999);
-    if (selectedDate > end) {
-      return { available: false, reason: `Tour ends on ${end.toLocaleDateString()}` };
+    if (value?.seconds) {
+      return new Date(value.seconds * 1000);
     }
-  }
+    if (value instanceof Date) {
+      return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    return null;
+  };
 
-  // Get day of week (0 = Sunday, 6 = Saturday)
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const dayOfWeek = dayNames[selectedDate.getDay()];
+  const isDateWithinOverride = (dateStr: string, start: string, end?: string) => {
+    const d = new Date(dateStr + "T00:00:00");
+    const s = new Date(start + "T00:00:00");
+    const e = new Date((end || start) + "T23:59:59");
+    return d >= s && d <= e;
+  };
 
-  // Check if date falls within any dateSpecificDays range
-  const isInDateRange = tour.dateSpecificDays?.some(range => {
-    const start = new Date(range.startDate);
-    const end = new Date(range.endDate);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return selectedDate >= start && selectedDate <= end;
-  });
+  const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; reason?: string } => {
+    if (!dateString) {
+      return { available: false, reason: "Please select a date" };
+    }
 
-  // Check if the day of week has available hours in weeklyHours
-  const hasWeeklyHours = tour.weeklyHours?.[dayOfWeek]?.length > 0;
+    const selectedDate = new Date(dateString + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  // Date must either be in a date range OR have weekly hours for that day
-  if (!isInDateRange && !hasWeeklyHours) {
-    return { 
-      available: false, 
-      reason: "Unable to book on this day. Please select an available date." 
-    };
-  }
+    // Check if date is in the past
+    if (selectedDate < today) {
+      return { available: false, reason: "Cannot book past dates" };
+    }
 
-  // Check dateSpecificBlockDays for unavailable dates
-  const dateSpecific = findDateOverride(dateString, tour);
-  if (dateSpecific?.unavailable) {
-    return { 
-      available: false, 
-      reason: "This date is unavailable for bookings." 
-    };
-  }
+    // Global holiday blocks (appliesToAllTours)
+    const globallyBlocked = tours.some((t) =>
+      (t.dateSpecificBlockDays || []).some(
+        (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateString, d.startDate, d.endDate)
+      )
+    );
+    if (globallyBlocked) {
+      return { available: false, reason: "This date is blocked for all tours (holiday/closure)." };
+    }
 
-  return { available: true };
-};
+    // Respect tour start/end window
+    const tourStart = toDateOnly(tour.startDate);
+    const tourEnd = toDateOnly(tour.endDate);
+    if (tourStart) {
+      const start = new Date(tourStart);
+      start.setHours(0, 0, 0, 0);
+      if (selectedDate < start) {
+        return { available: false, reason: `Tour starts on ${start.toLocaleDateString()}` };
+      }
+    }
+    if (tourEnd) {
+      const end = new Date(tourEnd);
+      end.setHours(23, 59, 59, 999);
+      if (selectedDate > end) {
+        return { available: false, reason: `Tour ends on ${end.toLocaleDateString()}` };
+      }
+    }
+
+    // Get day of week (0 = Sunday, 6 = Saturday)
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = dayNames[selectedDate.getDay()];
+
+    // Check if date falls within any dateSpecificDays range
+    const isInDateRange = tour.dateSpecificDays?.some(range => {
+      const start = new Date(range.startDate);
+      const end = new Date(range.endDate);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return selectedDate >= start && selectedDate <= end;
+    });
+
+    // Check if the day of week has available hours in weeklyHours
+    const hasWeeklyHours = tour.weeklyHours?.[dayOfWeek]?.length > 0;
+
+    // Date must either be in a date range OR have weekly hours for that day
+    if (!isInDateRange && !hasWeeklyHours) {
+      return {
+        available: false,
+        reason: "Unable to book on this day. Please select an available date."
+      };
+    }
+
+    // Check dateSpecificBlockDays for unavailable dates
+    const dateSpecific = findDateOverride(dateString, tour);
+    if (dateSpecific?.unavailable) {
+      return {
+        available: false,
+        reason: "This date is unavailable for bookings."
+      };
+    }
+
+    return { available: true };
+  };
 
   // ---------- Validation ----------
   const validateSection = (section: number): boolean => {
@@ -754,7 +765,7 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
 
   const prevSection = () => setCurrentSection((s) => Math.max(s - 1, 1));
 
-    // ---------- Submit ----------
+  // ---------- Submit ----------
   const handleSubmit = async () => {
     if (isSubmitting) return;
     if (!validateSection(currentSection)) return;
@@ -817,6 +828,7 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
       // Try to hit the API, but don't fail the booking if this call errors
       try {
         await api.post("/book-tour/", bookingPayload);
+        console.log(bookingPayload)
       } catch (apiError) {
         console.warn("Booking saved to Firestore, but API call failed:", apiError);
       }
@@ -857,7 +869,7 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   };
 
 
-// ---------- Renderers for Sections ----------
+  // ---------- Renderers for Sections ----------
   const renderSectionIndicator = () => {
     const progressPct = (currentSection / sections.length) * 100;
     return (
@@ -915,315 +927,315 @@ const isDateAvailable = (dateString: string, tour: Tour): { available: boolean; 
   };
 
   const renderSection1 = () => {
-  const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
+    const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
 
-  // Calculate min/max date based on dateSpecificDays range and 24-hour notice
-  const getDateRange = () => {
-    if (!selectedTourData) return { minDate: null, maxDate: null };
+    // Calculate min/max date based on dateSpecificDays range and 24-hour notice
+    const getDateRange = () => {
+      if (!selectedTourData) return { minDate: null, maxDate: null };
 
-    const now = new Date();
-    const tourStart = toDateOnly(selectedTourData.startDate);
-    const tourEnd = toDateOnly(selectedTourData.endDate);
-    
-    // Calculate 24-hour minimum from now
-    let minNoticeDate = new Date(now);
-    minNoticeDate.setDate(minNoticeDate.getDate() + 1);
-    minNoticeDate.setHours(0, 0, 0, 0);
+      const now = new Date();
+      const tourStart = toDateOnly(selectedTourData.startDate);
+      const tourEnd = toDateOnly(selectedTourData.endDate);
 
-    // Get dateSpecificDays range if it exists
-    let rangeMinDate = null;
-    let rangeMaxDate = null;
+      // Calculate 24-hour minimum from now
+      let minNoticeDate = new Date(now);
+      minNoticeDate.setDate(minNoticeDate.getDate() + 1);
+      minNoticeDate.setHours(0, 0, 0, 0);
 
-    if (selectedTourData.dateSpecificDays && selectedTourData.dateSpecificDays.length > 0) {
-      // Find the earliest startDate and latest endDate in the array
-      const dates = selectedTourData.dateSpecificDays.map(d => ({
-        start: new Date(d.startDate + 'T00:00:00'),
-        end: new Date(d.endDate + 'T23:59:59')
-      }));
+      // Get dateSpecificDays range if it exists
+      let rangeMinDate = null;
+      let rangeMaxDate = null;
 
-      rangeMinDate = new Date(Math.min(...dates.map(d => d.start.getTime())));
-      rangeMaxDate = new Date(Math.max(...dates.map(d => d.end.getTime())));
+      if (selectedTourData.dateSpecificDays && selectedTourData.dateSpecificDays.length > 0) {
+        // Find the earliest startDate and latest endDate in the array
+        const dates = selectedTourData.dateSpecificDays.map(d => ({
+          start: new Date(d.startDate + 'T00:00:00'),
+          end: new Date(d.endDate + 'T23:59:59')
+        }));
 
-      console.log('dateSpecificDays range:', rangeMinDate.toDateString(), 'to', rangeMaxDate.toDateString());
-    }
-    
+        rangeMinDate = new Date(Math.min(...dates.map(d => d.start.getTime())));
+        rangeMaxDate = new Date(Math.max(...dates.map(d => d.end.getTime())));
 
-    // Use the later of: 24-hour notice or range start date
-    let minDate = [minNoticeDate, rangeMinDate, tourStart]
-      .filter((d): d is Date => !!d)
-      .reduce((max, d) => (d > max ? d : max), minNoticeDate);
-
-    // Use range end date if it exists, otherwise calculate from maxNotice
-    let maxDate = rangeMaxDate;
-    if (!maxDate) {
-      maxDate = new Date(now);
-      switch (selectedTourData.maxNoticeUnit) {
-        case 'days':
-          maxDate.setDate(maxDate.getDate() + selectedTourData.maxNotice);
-          break;
-        case 'weeks':
-          maxDate.setDate(maxDate.getDate() + (selectedTourData.maxNotice * 7));
-          break;
-        case 'months':
-          maxDate.setMonth(maxDate.getMonth() + selectedTourData.maxNotice);
-          break;
+        console.log('dateSpecificDays range:', rangeMinDate.toDateString(), 'to', rangeMaxDate.toDateString());
       }
-    }
-
-    // Clamp to tour end date if provided
-    if (tourEnd && (!maxDate || tourEnd < maxDate)) {
-      const endOfDay = new Date(tourEnd);
-      endOfDay.setHours(23, 59, 59, 999);
-      maxDate = endOfDay;
-    }
-
-    // Guard against inverted ranges
-    if (maxDate && maxDate < minDate) {
-      maxDate = minDate;
-    }
-
-    console.log('Final date range - min:', minDate?.toDateString(), 'max:', maxDate?.toDateString());
 
 
-    return { minDate, maxDate };
-  };
+      // Use the later of: 24-hour notice or range start date
+      let minDate = [minNoticeDate, rangeMinDate, tourStart]
+        .filter((d): d is Date => !!d)
+        .reduce((max, d) => (d > max ? d : max), minNoticeDate);
 
-  const { minDate, maxDate } = getDateRange();
+      // Use range end date if it exists, otherwise calculate from maxNotice
+      let maxDate = rangeMaxDate;
+      if (!maxDate) {
+        maxDate = new Date(now);
+        switch (selectedTourData.maxNoticeUnit) {
+          case 'days':
+            maxDate.setDate(maxDate.getDate() + selectedTourData.maxNotice);
+            break;
+          case 'weeks':
+            maxDate.setDate(maxDate.getDate() + (selectedTourData.maxNotice * 7));
+            break;
+          case 'months':
+            maxDate.setMonth(maxDate.getMonth() + selectedTourData.maxNotice);
+            break;
+        }
+      }
 
-  // Helper to check if a date has any available time slots
-  const hasAvailableTimeSlots = (dateStr: string): boolean => {
-    if (!selectedTourData) return false;
-    
-    // Block immediately if globally unavailable
-    const globallyBlocked = tours.some((t) =>
-      (t.dateSpecificBlockDays || []).some(
-        (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateStr, d.startDate, d.endDate)
-      )
-    );
-    if (globallyBlocked) return false;
-    
-    const now = new Date();
-    const minDateTime = new Date(now);
-    minDateTime.setHours(minDateTime.getHours() + 24);
-    
-    // Get duration and frequency
-    const durationMins =
-      selectedTourData.durationUnit === "hours" || selectedTourData.durationUnit === "hour" 
-        ? selectedTourData.duration * 60 
-        : selectedTourData.duration;
-    
-    const frequencyMins =
-      selectedTourData.frequencyUnit === "hours" || selectedTourData.frequencyUnit === "hour"
-        ? selectedTourData.frequency * 60 
-        : selectedTourData.frequency;
-    
-    // Check for date-specific hours first
-    const dateSpecific = findDateOverride(dateStr, selectedTourData);
-    
-    let allTimeSlots: string[] = [];
-    
-    if (dateSpecific && dateSpecific.slots) {
-      allTimeSlots = dateSpecific.slots.flatMap((slot) =>
-        generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
+      // Clamp to tour end date if provided
+      if (tourEnd && (!maxDate || tourEnd < maxDate)) {
+        const endOfDay = new Date(tourEnd);
+        endOfDay.setHours(23, 59, 59, 999);
+        maxDate = endOfDay;
+      }
+
+      // Guard against inverted ranges
+      if (maxDate && maxDate < minDate) {
+        maxDate = minDate;
+      }
+
+      console.log('Final date range - min:', minDate?.toDateString(), 'max:', maxDate?.toDateString());
+
+
+      return { minDate, maxDate };
+    };
+
+    const { minDate, maxDate } = getDateRange();
+
+    // Helper to check if a date has any available time slots
+    const hasAvailableTimeSlots = (dateStr: string): boolean => {
+      if (!selectedTourData) return false;
+
+      // Block immediately if globally unavailable
+      const globallyBlocked = tours.some((t) =>
+        (t.dateSpecificBlockDays || []).some(
+          (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateStr, d.startDate, d.endDate)
+        )
       );
-    } else {
-      // Fall back to weekly hours
-      const dateObj = new Date(dateStr + 'T00:00:00');
-      const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" });
-      
-      const weekly = selectedTourData.weeklyHours?.[dayOfWeek];
-      
-      if (weekly && weekly.length > 0) {
-        allTimeSlots = weekly.flatMap((slot) =>
+      if (globallyBlocked) return false;
+
+      const now = new Date();
+      const minDateTime = new Date(now);
+      minDateTime.setHours(minDateTime.getHours() + 24);
+
+      // Get duration and frequency
+      const durationMins =
+        selectedTourData.durationUnit === "hours" || selectedTourData.durationUnit === "hour"
+          ? selectedTourData.duration * 60
+          : selectedTourData.duration;
+
+      const frequencyMins =
+        selectedTourData.frequencyUnit === "hours" || selectedTourData.frequencyUnit === "hour"
+          ? selectedTourData.frequency * 60
+          : selectedTourData.frequency;
+
+      // Check for date-specific hours first
+      const dateSpecific = findDateOverride(dateStr, selectedTourData);
+
+      let allTimeSlots: string[] = [];
+
+      if (dateSpecific && dateSpecific.slots) {
+        allTimeSlots = dateSpecific.slots.flatMap((slot) =>
           generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
         );
+      } else {
+        // Fall back to weekly hours
+        const dateObj = new Date(dateStr + 'T00:00:00');
+        const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" });
+
+        const weekly = selectedTourData.weeklyHours?.[dayOfWeek];
+
+        if (weekly && weekly.length > 0) {
+          allTimeSlots = weekly.flatMap((slot) =>
+            generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
+          );
+        }
       }
-    }
-    
-    // Check if any slots meet the 24-hour requirement and aren't full
-    return allTimeSlots.some(time => {
-      const [timePart, period] = time.split(' ');
-      const [hours, minutes] = timePart.split(':').map(Number);
-      
-      let hour24 = hours;
-      if (period === 'PM' && hours !== 12) hour24 += 12;
-      if (period === 'AM' && hours === 12) hour24 = 0;
-      
-      const slotDateTime = new Date(dateStr + 'T00:00:00');
-      slotDateTime.setHours(hour24, minutes, 0, 0);
-      
-      // Check if slot is at least 24 hours away
-      if (slotDateTime < minDateTime) return false;
-      
-      // Check if slot is not full
-      const bookingCount = bookings.filter((booking) =>
-        booking.tourId === selectedTourData.tourId &&
-        booking.date === dateStr &&
-        getBookingTime(booking) === time
-      ).length;
-      const maxBookings = selectedTourData.maxBookings || 1;
-      
-      return bookingCount < maxBookings;
-    });
-  };
 
-  // Enhanced date validation
-  const isDateInRange = (dateStr: string): boolean => {
-    if (!minDate || !maxDate) return true;
-    
-    const date = new Date(dateStr + 'T00:00:00');
-    return date >= minDate && date <= maxDate;
-  };
+      // Check if any slots meet the 24-hour requirement and aren't full
+      return allTimeSlots.some(time => {
+        const [timePart, period] = time.split(' ');
+        const [hours, minutes] = timePart.split(':').map(Number);
 
-  return (
-    <div className="space-y-8">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Tour Experience</h2>
-        <p className="text-gray-600">Select the tour that best matches your interests and preferred date</p>
-      </div>
+        let hour24 = hours;
+        if (period === 'PM' && hours !== 12) hour24 += 12;
+        if (period === 'AM' && hours === 12) hour24 = 0;
 
-      <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 text-sm text-yellow-900">
-        More tours for April - June will be announced shortly. Please check back on March 23rd for new availability.
-      </div>
+        const slotDateTime = new Date(dateStr + 'T00:00:00');
+        slotDateTime.setHours(hour24, minutes, 0, 0);
 
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Tours</h3>
-        <div className="grid gap-6">
-          {selectedTour ? (
-            // Show only the selected tour
-            selectedTourData && (
-              <div className="tour-card selected">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-indigo-600 mb-2">{selectedTourData.title}</h3>
-                    <p className="text-gray-600 text-sm mb-4">{selectedTourData.description}</p>
-                    <div className="text-sm text-gray-700 space-y-1">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        {selectedTourData.duration} {selectedTourData.durationUnit}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-4 h-4" />
-                        Max {selectedTourData.maxAttendeesPerBooking} people
-                      </span>
+        // Check if slot is at least 24 hours away
+        if (slotDateTime < minDateTime) return false;
+
+        // Check if slot is not full
+        const bookingCount = bookings.filter((booking) =>
+          booking.tourId === selectedTourData.tourId &&
+          booking.date === dateStr &&
+          getBookingTime(booking) === time
+        ).length;
+        const maxBookings = selectedTourData.maxBookings || 1;
+
+        return bookingCount < maxBookings;
+      });
+    };
+
+    // Enhanced date validation
+    const isDateInRange = (dateStr: string): boolean => {
+      if (!minDate || !maxDate) return true;
+
+      const date = new Date(dateStr + 'T00:00:00');
+      return date >= minDate && date <= maxDate;
+    };
+
+    return (
+      <div className="space-y-8">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Tour Experience</h2>
+          <p className="text-gray-600">Select the tour that best matches your interests and preferred date</p>
+        </div>
+
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 text-sm text-yellow-900">
+          More tours for April - June will be announced shortly. Please check back on March 23rd for new availability.
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Tours</h3>
+          <div className="grid gap-6">
+            {selectedTour ? (
+              // Show only the selected tour
+              selectedTourData && (
+                <div className="tour-card selected">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-indigo-600 mb-2">{selectedTourData.title}</h3>
+                      <p className="text-gray-600 text-sm mb-4">{selectedTourData.description}</p>
+                      <div className="text-sm text-gray-700 space-y-1">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-4 h-4" />
+                          {selectedTourData.duration} {selectedTourData.durationUnit}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="w-4 h-4" />
+                          Max {selectedTourData.maxAttendeesPerBooking} people
+                        </span>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => {
+                        setSelectedTour(null);
+                        setBookingData(prev => ({ ...prev, tourId: "", tourType: "" }));
+                      }}
+                      className="text-gray-600 hover:text-gray-900 text-sm underline"
+                    >
+                      Change Tour
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : (
+              // Show all tours when none is selected
+              tours.map((tour) => (
+                <div key={tour.tourId} className="tour-card">
+                  <h3 className="text-lg font-semibold text-indigo-600 mb-2">{tour.title}</h3>
+                  <p className="text-gray-600 text-sm mb-4 line-clamp-3">{tour.description}</p>
+                  <div className="text-sm text-gray-700 space-y-1">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {tour.duration} {tour.durationUnit}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-4 h-4" />
+                      Max {tour.maxAttendeesPerBooking} people
+                    </span>
                   </div>
                   <button
-                    onClick={() => {
-                      setSelectedTour(null);
-                      setBookingData(prev => ({ ...prev, tourId: "", tourType: "" }));
-                    }}
-                    className="text-gray-600 hover:text-gray-900 text-sm underline"
+                    onClick={() => selectTourById(tour.tourId)}
+                    className="mt-4 px-4 py-2 rounded-lg font-semibold bg-gray-200 text-gray-700 hover:bg-blue-100"
                   >
-                    Change Tour
+                    Select This Tour
                   </button>
                 </div>
-              </div>
-            )
-          ) : (
-            // Show all tours when none is selected
-            tours.map((tour) => (
-              <div key={tour.tourId} className="tour-card">
-                <h3 className="text-lg font-semibold text-indigo-600 mb-2">{tour.title}</h3>
-                <p className="text-gray-600 text-sm mb-4 line-clamp-3">{tour.description}</p>
-                <div className="text-sm text-gray-700 space-y-1">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    {tour.duration} {tour.durationUnit}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="w-4 h-4" />
-                    Max {tour.maxAttendeesPerBooking} people
-                  </span>
-                </div>
-                <button
-                  onClick={() => selectTourById(tour.tourId)}
-                  className="mt-4 px-4 py-2 rounded-lg font-semibold bg-gray-200 text-gray-700 hover:bg-blue-100"
-                >
-                  Select This Tour
-                </button>
-              </div>
-            ))
+              ))
+            )}
+          </div>
+        </div>
+
+        {errors.tourType && (
+          <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+            <AlertCircle className="w-4 w-4" />
+            {errors.tourType}
+          </p>
+        )}
+
+        <div>
+          <label className="block text-lg font-semibold text-gray-900 mb-4">Preferred Date</label>
+          <CustomCalendar
+            selectedDate={bookingData.date}
+            onDateSelect={(date) => {
+              updateBookingData("date", date);
+
+              // Validate immediately if a tour is selected
+              if (selectedTourData) {
+                // Check date range first
+                if (!isDateInRange(date)) {
+                  setErrors(prev => ({
+                    ...prev,
+                    date: `Please select a date between ${minDate?.toLocaleDateString()} and ${maxDate?.toLocaleDateString()}`
+                  }));
+                  return;
+                }
+
+                const validation = isDateAvailable(date, selectedTourData);
+                if (!validation.available) {
+                  setErrors(prev => ({ ...prev, date: validation.reason || "Unable to book on this day. Please select an available date." }));
+                } else {
+                  setErrors(prev => ({ ...prev, date: "" }));
+                }
+              }
+            }}
+            tourData={selectedTourData}
+            isDateAvailable={(date, tour) => {
+              // First check if date is in valid range
+              if (!isDateInRange(date)) {
+                return { available: false, reason: "Date is outside the booking window" };
+              }
+              // Check if date has any available time slots (considering 24-hour notice)
+              if (!hasAvailableTimeSlots(date)) {
+                return { available: false, reason: "No available time slots for this date" };
+              }
+              // Then check original availability
+              return isDateAvailable(date, tour);
+            }}
+            minDate={minDate}
+            maxDate={maxDate}
+          />
+          {errors.date && (
+            <div className="flex items-center space-x-2 mt-2">
+              <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+              <p className="text-red-500 text-sm">{errors.date}</p>
+            </div>
           )}
         </div>
       </div>
+    );
+  };
 
-      {errors.tourType && (
-        <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
-          <AlertCircle className="w-4 w-4" />
-          {errors.tourType}
-        </p>
-      )}
+  // Replace the renderSection2 function with this updated version:
 
-      <div>
-        <label className="block text-lg font-semibold text-gray-900 mb-4">Preferred Date</label>
-        <CustomCalendar
-          selectedDate={bookingData.date}
-          onDateSelect={(date) => {
-            updateBookingData("date", date);
-            
-            // Validate immediately if a tour is selected
-            if (selectedTourData) {
-              // Check date range first
-              if (!isDateInRange(date)) {
-                setErrors(prev => ({ 
-                  ...prev, 
-                  date: `Please select a date between ${minDate?.toLocaleDateString()} and ${maxDate?.toLocaleDateString()}`
-                }));
-                return;
-              }
-
-              const validation = isDateAvailable(date, selectedTourData);
-              if (!validation.available) {
-                setErrors(prev => ({ ...prev, date: validation.reason || "Unable to book on this day. Please select an available date." }));
-              } else {
-                setErrors(prev => ({ ...prev, date: "" }));
-              }
-            }
-          }}
-          tourData={selectedTourData}
-          isDateAvailable={(date, tour) => {
-            // First check if date is in valid range
-            if (!isDateInRange(date)) {
-              return { available: false, reason: "Date is outside the booking window" };
-            }
-            // Check if date has any available time slots (considering 24-hour notice)
-            if (!hasAvailableTimeSlots(date)) {
-              return { available: false, reason: "No available time slots for this date" };
-            }
-            // Then check original availability
-            return isDateAvailable(date, tour);
-          }}
-          minDate={minDate}
-          maxDate={maxDate}
-        />
-        {errors.date && (
-          <div className="flex items-center space-x-2 mt-2">
-            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-            <p className="text-red-500 text-sm">{errors.date}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Replace the renderSection2 function with this updated version:
-
-const renderSection2 = () => {
+  const renderSection2 = () => {
     const selected = tours.find((t) => t.tourId === bookingData.tourId);
     if (!selected) return null;
 
     // Convert duration to minutes - handles both "hour" and "hours"
     const durationMins =
-      selected.durationUnit === "hours" || selected.durationUnit === "hour" 
-        ? selected.duration * 60 
+      selected.durationUnit === "hours" || selected.durationUnit === "hour"
+        ? selected.duration * 60
         : selected.duration;
-    
+
     // Convert frequency to minutes - handles both "hour" and "hours"
     const frequencyMins =
       selected.frequencyUnit === "hours" || selected.frequencyUnit === "hour"
-        ? selected.frequency * 60 
+        ? selected.frequency * 60
         : selected.frequency;
 
     // Calculate minimum allowed datetime (24 hours from now)
@@ -1239,14 +1251,14 @@ const renderSection2 = () => {
       const minDateTime = getMinDateTime();
       const [timePart, period] = time.split(' ');
       const [hours, minutes] = timePart.split(':').map(Number);
-      
+
       let hour24 = hours;
       if (period === 'PM' && hours !== 12) hour24 += 12;
       if (period === 'AM' && hours === 12) hour24 = 0;
-      
+
       const slotDateTime = new Date(bookingData.date + 'T00:00:00');
       slotDateTime.setHours(hour24, minutes, 0, 0);
-      
+
       return slotDateTime >= minDateTime;
     };
 
@@ -1262,10 +1274,10 @@ const renderSection2 = () => {
     const isTimeSlotFull = (time: string): boolean => {
       const date = bookingData.date;
       if (!date) return false;
-      
+
       const bookingCount = getBookingCount(date, time);
       const maxBookings = selected.maxBookings || 1;
-      
+
       return bookingCount >= maxBookings;
     };
 
@@ -1302,15 +1314,15 @@ const renderSection2 = () => {
     const getAvailableTimes = () => {
       const date = bookingData.date;
       if (!date) return [];
-      
+
       console.log("Selected date:", date);
       console.log("Tour weeklyHours:", selected.weeklyHours);
-      
+
       // Check for date-specific hours first
       const dateSpecific = findDateOverride(date, selected);
-      
+
       let allTimeSlots: string[] = [];
-      
+
       if (dateSpecific && dateSpecific.slots) {
         console.log("Using date-specific slots:", dateSpecific.slots);
         allTimeSlots = dateSpecific.slots.flatMap((slot) =>
@@ -1321,35 +1333,35 @@ const renderSection2 = () => {
         const dateObj = new Date(date + 'T00:00:00');
         const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" });
         console.log("Day of week:", dayOfWeek);
-        
+
         const weekly = selected.weeklyHours?.[dayOfWeek];
         console.log("Weekly hours for", dayOfWeek, ":", weekly);
-        
-      if (weekly && weekly.length > 0) {
-        allTimeSlots = weekly.flatMap((slot) =>
-          generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
-        );
-        console.log("Generated time slots:", allTimeSlots);
-      }
-    }
-    
-    const hasCoverage = (time: string) => {
-      // require at least one active BESA whose office hours cover the entire tour duration
-      return besas.some(
-        (besa) =>
-          besa.status === "active" &&
-          isBesaAvailable(besa, date, time, durationMins)
-      );
-    };
 
-    const availableSlots = allTimeSlots.filter(time => 
-      hasCoverage(time) &&
-      !isTimeSlotFull(time) &&
-      isTimeSlotValid(time) &&
-      !hasCrossTourConflict(date, time)
-    );
+        if (weekly && weekly.length > 0) {
+          allTimeSlots = weekly.flatMap((slot) =>
+            generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
+          );
+          console.log("Generated time slots:", allTimeSlots);
+        }
+      }
+
+      const hasCoverage = (time: string) => {
+        // require at least one active BESA whose office hours cover the entire tour duration
+        return besas.some(
+          (besa) =>
+            besa.status === "active" &&
+            isBesaAvailable(besa, date, time, durationMins)
+        );
+      };
+
+      const availableSlots = allTimeSlots.filter(time =>
+        hasCoverage(time) &&
+        !isTimeSlotFull(time) &&
+        isTimeSlotValid(time) &&
+        !hasCrossTourConflict(date, time)
+      );
       console.log("Available (non-full, valid notice) slots:", availableSlots);
-      
+
       return availableSlots;
     };
 
@@ -1365,10 +1377,10 @@ const renderSection2 = () => {
     const getRemainingSpots = (time: string) => {
       const date = bookingData.date;
       if (!date) return selected.maxBookings || 1;
-      
+
       const bookingCount = getBookingCount(date, time);
       const maxBookings = selected.maxBookings || 1;
-      
+
       return Math.max(0, maxBookings - bookingCount);
     };
 
@@ -1404,15 +1416,14 @@ const renderSection2 = () => {
                       updateBookingData("startTime", time);
                       updateBookingData("time", time);
                     }}
-                    className={`p-4 border-2 rounded-lg text-center transition-all hover:shadow-md ${
-                      bookingData.startTime === time
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
+                    className={`p-4 border-2 rounded-lg text-center transition-all hover:shadow-md ${bookingData.startTime === time
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-200 hover:border-gray-300"
+                      }`}
                   >
                     <Clock className="w-5 h-5 mx-auto mb-2 text-gray-600" />
                     <span className="font-medium block">{time}</span>
-                    {remainingSpots <= 5 && (
+                    {remainingSpots <= 3 && (
                       <span className="text-xs text-orange-600 mt-1 block">
                         {remainingSpots} spot{remainingSpots !== 1 ? 's' : ''} left
                       </span>
@@ -1428,11 +1439,11 @@ const renderSection2 = () => {
           </div>
           {errors.time && <p className="text-red-500 text-sm mt-2">{errors.time}</p>}
         </div>
-        
+
         {/* Group Size Selection */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Size</h3>
-          <div className="flex items-center justify-center sm:justify-start space-x-6">  
+          <div className="flex items-center justify-center sm:justify-start space-x-6">
             <button
               type="button"
               onClick={() => updateGroupSize(bookingData.maxAttendees - 1)}
@@ -1458,7 +1469,7 @@ const renderSection2 = () => {
               +
             </button>
           </div>
-          <p className="text-left text-sm text-gray-500 mt-2"> 
+          <p className="text-left text-sm text-gray-500 mt-2">
             Maximum {selected.maxAttendeesPerBooking} people per tour
           </p>
           {errors.maxAttendees && (
@@ -1469,244 +1480,244 @@ const renderSection2 = () => {
     );
   };
 
-const renderSection3 = () => {
-  const majorInterests = [
-    { id: 'computer-science', label: 'B.S. Computer Science' },
-    { id: 'biomolecular-engineering', label: 'B.S. Biomolecular Engineering' },
-    { id: 'bioinformatics', label: 'B.S. Bioinformatics' },
-    { id: 'biotechnology', label: 'B.A. Biotechnology' },
-    { id: 'applied-mathematics', label: 'B.S. Applied Mathematics' },
-    { id: 'network-and-digital-technology', label: 'B.A. Network and Digital Technology' },
-    { id: 'game-design', label: 'B.S. Computer Science: Game Design' },
-    { id: 'tim', label: 'B.S. Technology and Information Management (TIM)' },
-    { id: 'electrical-engineering', label: 'B.S. Electrical Engineering' },
-    { id: 'computer-engineering', label: 'B.S. Computer Engineering' },
-    { id: 'robotics', label: 'B.S. Robotics Engineering' }
-  ];
+  const renderSection3 = () => {
+    const majorInterests = [
+      { id: 'computer-science', label: 'B.S. Computer Science' },
+      { id: 'biomolecular-engineering', label: 'B.S. Biomolecular Engineering' },
+      { id: 'bioinformatics', label: 'B.S. Bioinformatics' },
+      { id: 'biotechnology', label: 'B.A. Biotechnology' },
+      { id: 'applied-mathematics', label: 'B.S. Applied Mathematics' },
+      { id: 'network-and-digital-technology', label: 'B.A. Network and Digital Technology' },
+      { id: 'game-design', label: 'B.S. Computer Science: Game Design' },
+      { id: 'tim', label: 'B.S. Technology and Information Management (TIM)' },
+      { id: 'electrical-engineering', label: 'B.S. Electrical Engineering' },
+      { id: 'computer-engineering', label: 'B.S. Computer Engineering' },
+      { id: 'robotics', label: 'B.S. Robotics Engineering' }
+    ];
 
-  const handleInterestChange = (interestId: string, isChecked: boolean) => {
-    const currentInterests = bookingData.interests || [];
-    let updatedInterests;
-    
-    if (isChecked) {
-      updatedInterests = [...currentInterests, interestId];
-    } else {
-      updatedInterests = currentInterests.filter(id => id !== interestId);
-    }
-    
-    updateBookingData("interests", updatedInterests);
-  };
+    const handleInterestChange = (interestId: string, isChecked: boolean) => {
+      const currentInterests = bookingData.interests || [];
+      let updatedInterests;
 
-  const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
-  const largeDetailsEnabled = selectedTourData?.intakeForm?.largeTourDetailsEnabled;
-  const largeDetailsLabel =
-    selectedTourData?.intakeForm?.largeTourDetailsLabel ||
-    "Please share details about your large in-person group (size, needs, schedule).";
+      if (isChecked) {
+        updatedInterests = [...currentInterests, interestId];
+      } else {
+        updatedInterests = currentInterests.filter(id => id !== interestId);
+      }
 
-  return (
-    <div className="space-y-8">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Complete Your Booking</h2>
-        <p className="text-gray-600">Provide your details and preferences to finalize your tour</p>
-      </div>
+      updateBookingData("interests", updatedInterests);
+    };
 
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <User className="w-5 h-5" />
-          Personal Information
-        </h3>
+    const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
+    const largeDetailsEnabled = selectedTourData?.intakeForm?.largeTourDetailsEnabled;
+    const largeDetailsLabel =
+      selectedTourData?.intakeForm?.largeTourDetailsLabel ||
+      "Please share details about your large in-person group (size, needs, schedule).";
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
-            <input
-              type="text"
-              value={bookingData.firstName}
-              onChange={(e) => updateBookingData("firstName", e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.firstName ? "border-red-500" : "border-gray-300"
-                }`}
-              placeholder="Enter your first name"
-            />
-            {errors.firstName && <p className="text-red-500 text-sm mt-1">{errors.firstName}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
-            <input
-              type="text"
-              value={bookingData.lastName}
-              onChange={(e) => updateBookingData("lastName", e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.lastName ? "border-red-500" : "border-gray-300"
-                }`}
-              placeholder="Enter your last name"
-            />
-            {errors.lastName && <p className="text-red-500 text-sm mt-1">{errors.lastName}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
-            <input
-              type="email"
-              value={bookingData.email}
-              onChange={(e) => updateBookingData("email", e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contactEmail ? "border-red-500" : "border-gray-300"
-                }`}
-              placeholder="your.email@example.com"
-            />
-            {errors.contactEmail && (
-              <p className="text-red-500 text-sm mt-1">{errors.contactEmail}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
-            <input
-              type="tel"
-              value={bookingData.phone}
-              onChange={(e) => updateBookingData("phone", formatPhoneNumber(e.target.value))}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contactPhone ? "border-red-500" : "border-gray-300"
-                }`}
-              placeholder="(555) 123-4567"
-            />
-            {errors.contactPhone && (
-              <p className="text-red-500 text-sm mt-1">{errors.contactPhone}</p>
-            )}
-          </div>
+    return (
+      <div className="space-y-8">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Complete Your Booking</h2>
+          <p className="text-gray-600">Provide your details and preferences to finalize your tour</p>
         </div>
-      </div>
 
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <GraduationCap className="w-5 h-5" />
-          Background Information
-        </h3>
+        <div className="bg-gray-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <User className="w-5 h-5" />
+            Personal Information
+          </h3>
 
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Organization/School *
-            </label>
-            <input
-              type="text"
-              value={bookingData.organization}
-              onChange={(e) => updateBookingData("organization", e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.organization ? "border-red-500" : "border-gray-300"
-                }`}
-              placeholder="Your school or organization"
-            />
-            {errors.organization && (
-              <p className="text-red-500 text-sm mt-1">{errors.organization}</p>
-            )}
-          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">First Name *</label>
+              <input
+                type="text"
+                value={bookingData.firstName}
+                onChange={(e) => updateBookingData("firstName", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.firstName ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="Enter your first name"
+              />
+              {errors.firstName && <p className="text-red-500 text-sm mt-1">{errors.firstName}</p>}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Role *</label>
-            <select
-              value={bookingData.role}
-              onChange={(e) => updateBookingData("role", e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.role ? "border-red-500" : "border-gray-300"
-                }`}
-            >
-              <option value="">Select your role</option>
-              <option value="prospective-student">Prospective Student</option>
-              <option value="parent">Parent/Guardian</option>
-              <option value="counselor">School Counselor</option>
-              <option value="teacher">Teacher</option>
-              <option value="administrator">Administrator</option>
-              <option value="other">Other</option>
-            </select>
-            {errors.role && <p className="text-red-500 text-sm mt-1">{errors.role}</p>}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Last Name *</label>
+              <input
+                type="text"
+                value={bookingData.lastName}
+                onChange={(e) => updateBookingData("lastName", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.lastName ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="Enter your last name"
+              />
+              {errors.lastName && <p className="text-red-500 text-sm mt-1">{errors.lastName}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+              <input
+                type="email"
+                value={bookingData.email}
+                onChange={(e) => updateBookingData("email", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contactEmail ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="your.email@example.com"
+              />
+              {errors.contactEmail && (
+                <p className="text-red-500 text-sm mt-1">{errors.contactEmail}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number *</label>
+              <input
+                type="tel"
+                value={bookingData.phone}
+                onChange={(e) => updateBookingData("phone", formatPhoneNumber(e.target.value))}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.contactPhone ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="(555) 123-4567"
+              />
+              {errors.contactPhone && (
+                <p className="text-red-500 text-sm mt-1">{errors.contactPhone}</p>
+              )}
+            </div>
           </div>
         </div>
 
-        {largeDetailsEnabled && (
-          <div className="border-t border-gray-200 pt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {largeDetailsLabel}
-            </label>
-            <textarea
-              value={bookingData.largeTourDetails || ""}
-              onChange={(e) => updateBookingData("largeTourDetails", e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
-              placeholder="Share group size, schedule constraints, accessibility needs, etc."
-            />
-          </div>
-        )}
+        <div className="bg-gray-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <GraduationCap className="w-5 h-5" />
+            Background Information
+          </h3>
 
-        {/* Major Interests Section */}
-        <div className="border-t border-gray-200 pt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-4">
-            Majors Interested Offered Under Baskin
-            <span className="text-gray-500 text-xs ml-1">(Select all that apply)</span>
-          </label>
-          
-          <div className="grid md:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-3">
-            {majorInterests.map((interests) => (
-              <label key={interests.id} className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={bookingData.interests?.includes(interests.id) || false}
-                  onChange={(e) => handleInterestChange(interests.id, e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">{interests.label}</span>
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Organization/School *
               </label>
-            ))}
+              <input
+                type="text"
+                value={bookingData.organization}
+                onChange={(e) => updateBookingData("organization", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.organization ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="Your school or organization"
+              />
+              {errors.organization && (
+                <p className="text-red-500 text-sm mt-1">{errors.organization}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Role *</label>
+              <select
+                value={bookingData.role}
+                onChange={(e) => updateBookingData("role", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.role ? "border-red-500" : "border-gray-300"
+                  }`}
+              >
+                <option value="">Select your role</option>
+                <option value="prospective-student">Prospective Student</option>
+                <option value="parent">Parent/Guardian</option>
+                <option value="counselor">School Counselor</option>
+                <option value="teacher">Teacher</option>
+                <option value="administrator">Administrator</option>
+                <option value="other">Other</option>
+              </select>
+              {errors.role && <p className="text-red-500 text-sm mt-1">{errors.role}</p>}
+            </div>
           </div>
-          
-          {errors.interests && (
-            <p className="text-red-500 text-sm mt-2">{errors.interests}</p>
+
+          {largeDetailsEnabled && (
+            <div className="border-t border-gray-200 pt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {largeDetailsLabel}
+              </label>
+              <textarea
+                value={bookingData.largeTourDetails || ""}
+                onChange={(e) => updateBookingData("largeTourDetails", e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                placeholder="Share group size, schedule constraints, accessibility needs, etc."
+              />
+            </div>
           )}
+
+          {/* Major Interests Section */}
+          <div className="border-t border-gray-200 pt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-4">
+              Majors Interested Offered Under Baskin
+              <span className="text-gray-500 text-xs ml-1">(Select all that apply)</span>
+            </label>
+
+            <div className="grid md:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-3">
+              {majorInterests.map((interests) => (
+                <label key={interests.id} className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bookingData.interests?.includes(interests.id) || false}
+                    onChange={(e) => handleInterestChange(interests.id, e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">{interests.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {errors.interests && (
+              <p className="text-red-500 text-sm mt-2">{errors.interests}</p>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">
-          Accommodations & Special Requests
-        </h3>
-        <p className="text-sm text-gray-600 mb-3">
-          Tell us about any accommodations we should prepare.
-        </p>
-        <textarea
-          value={bookingData.accommodations || ""}
-          onChange={(e) => updateBookingData("accommodations", e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
-          placeholder="Example: wheelchair access, ASL interpreter, mobility assistance, or other notes"
-        />
-      </div>
+        <div className="bg-gray-50 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            accommodations & Special Requests
+          </h3>
+          <p className="text-sm text-gray-600 mb-3">
+            Tell us about any accommodations we should prepare.
+          </p>
+          <textarea
+            value={bookingData.accommodations || ""}
+            onChange={(e) => updateBookingData("accommodations", e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+            placeholder="Example: wheelchair access, ASL interpreter, mobility assistance, or other notes"
+          />
+        </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h4 className="font-semibold text-blue-900 mb-3">Booking Summary</h4>
-        <div className="space-y-2 text-sm text-blue-800">
-          <p>
-            <span className="font-medium">Tour:</span>{" "}
-            {bookingData.tourType || tours.find((t) => t.tourId === bookingData.tourId)?.title}
-          </p>
-          <p>
-            <span className="font-medium">Date & Time:</span> {bookingData.date} at {bookingData.startTime}
-          </p>
-          <p>
-            <span className="font-medium">Group Size:</span> {bookingData.maxAttendees} people
-          </p>
-          <p>
-            <span className="font-medium">Contact:</span> {bookingData.firstName} {bookingData.lastName}
-          </p>
-          {bookingData.interests && bookingData.interests.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h4 className="font-semibold text-blue-900 mb-3">Booking Summary</h4>
+          <div className="space-y-2 text-sm text-blue-800">
             <p>
-              <span className="font-medium">Interests:</span>{" "}
-              {bookingData.interests
-                .map(id => majorInterests.find(interest => interest.id === id)?.label)
-                .filter(Boolean)
-                .join(", ")}
+              <span className="font-medium">Tour:</span>{" "}
+              {bookingData.tourType || tours.find((t) => t.tourId === bookingData.tourId)?.title}
             </p>
-          )}
+            <p>
+              <span className="font-medium">Date & Time:</span> {bookingData.date} at {bookingData.startTime}
+            </p>
+            <p>
+              <span className="font-medium">Group Size:</span> {bookingData.maxAttendees} people
+            </p>
+            <p>
+              <span className="font-medium">Contact:</span> {bookingData.firstName} {bookingData.lastName}
+            </p>
+            {bookingData.interests && bookingData.interests.length > 0 && (
+              <p>
+                <span className="font-medium">Interests:</span>{" "}
+                {bookingData.interests
+                  .map(id => majorInterests.find(interest => interest.id === id)?.label)
+                  .filter(Boolean)
+                  .join(", ")}
+              </p>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1748,7 +1759,7 @@ const renderSection3 = () => {
               className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors ${currentSection === 1
                 ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-              } w-full sm:w-auto`}
+                } w-full sm:w-auto`}
             >
               <ArrowLeft className="w-4 h-4" />
               Previous
@@ -1766,11 +1777,10 @@ const renderSection3 = () => {
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors w-full sm:w-auto ${
-                  isSubmitting
-                    ? "bg-green-300 text-white cursor-not-allowed"
-                    : "bg-green-600 text-white hover:bg-green-700"
-                }`}
+                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors w-full sm:w-auto ${isSubmitting
+                  ? "bg-green-300 text-white cursor-not-allowed"
+                  : "bg-green-600 text-white hover:bg-green-700"
+                  }`}
               >
                 <Check className="w-4 h-4" />
                 {isSubmitting ? "Booking..." : "Complete Booking"}
