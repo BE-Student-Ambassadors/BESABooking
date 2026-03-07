@@ -16,20 +16,13 @@ export default function DashboardView() {
   const [deleteBooking, setDeleteBooking] = useState<BookingData | null>(null);
   const [viewingBooking, setViewingBooking] = useState<BookingData | null>(null);
 
-  const normalizeBesas = (besas: unknown): string[] => {
-    if (!Array.isArray(besas)) return [];
-    return besas
-      .map((besa) => {
-        if (typeof besa === "string") return besa.trim();
-        if (besa && typeof besa === "object") {
-          const besaObj = besa as { name?: unknown; email?: unknown };
-          const name = typeof besaObj.name === "string" ? besaObj.name.trim() : "";
-          const email = typeof besaObj.email === "string" ? besaObj.email.trim() : "";
-          return name || email;
-        }
-        return "";
-      })
-      .filter((besa) => besa.length > 0);
+  const normalizeBesaEntry = (besa: any) => {
+    if (typeof besa === 'string') return besa;
+    if (besa && typeof besa === 'object') {
+      if (typeof besa.name === 'string' && besa.name.trim() !== '') return besa.name;
+      if (typeof besa.email === 'string' && besa.email.trim() !== '') return besa.email;
+    }
+    return String(besa ?? '');
   };
 
   const dayMapping = {
@@ -123,9 +116,7 @@ export default function DashboardView() {
         const snapshot = await getDocs(bookingsRef);
         const data = snapshot.docs.map((doc) => {
           const docData = doc.data() as any;
-          const normalizedBesas = normalizeBesas(
-            docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : [])
-          );
+          const normalizedBesas = (docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : [])).map(normalizeBesaEntry);
 
           return {
             ...docData,
@@ -256,10 +247,14 @@ export default function DashboardView() {
     );
   };
 
+  const formatBesas = (besas?: any[]) =>
+    (besas || [])
+      .map(normalizeBesaEntry)
+      .filter((b) => b && typeof b === 'string');
+
   // Auto-assign all available BESAs to a booking
   const autoAssignBesas = (bookingData: BookingData) => {
     const availableBesas = getAvailableBesas(bookingData);
-    console.log(availableBesas);
     return {
       ...bookingData,
       besas: availableBesas.map(besa => besa.name)
@@ -280,7 +275,7 @@ export default function DashboardView() {
 
   const handleEditClick = (booking: BookingData) => {
     setEditBooking(booking);
-    setFormData({ ...booking, besas: normalizeBesas(booking.besas || []) });
+    setFormData({ ...booking, besas: formatBesas(booking.besas) });
   };
 
   const handleDeleteClick = (booking: BookingData) => {
@@ -295,7 +290,7 @@ export default function DashboardView() {
       return {
         ...docData,
         bookingId: doc.id, // ensure we always use the Firestore doc id
-        besas: normalizeBesas(docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : []))
+        besas: formatBesas(docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : []))
       };
     }) as BookingData[];
     setBookings(data);
@@ -451,7 +446,7 @@ export default function DashboardView() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {booking.besas && booking.besas.length > 0 ? (
                         <div className="space-y-1">
-                          {booking.besas.map((besa, index) => (
+                          {formatBesas(booking.besas).map((besa, index) => (
                             <div
                               key={`${booking.bookingId}-${besa}-${index}`}
                               className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs mr-1"
@@ -550,7 +545,7 @@ export default function DashboardView() {
                     <span className="text-gray-500 w-20">BESAs</span>
                     <div className="flex flex-wrap gap-2">
                       {booking.besas && booking.besas.length > 0 ? (
-                        booking.besas.map((besa, index) => (
+                        formatBesas(booking.besas).map((besa, index) => (
                           <span
                             key={`${booking.bookingId}-${besa}-${index}`}
                             className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs"
@@ -668,7 +663,7 @@ export default function DashboardView() {
                 <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">BESAs</h4>
                 {viewingBooking.besas && viewingBooking.besas.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {viewingBooking.besas.map((besa, index) => (
+                    {formatBesas(viewingBooking.besas).map((besa, index) => (
                       <span key={`${viewingBooking.bookingId}-${besa}-${index}`} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
                         {besa}
                       </span>
@@ -817,7 +812,7 @@ export default function DashboardView() {
               {/* Display auto-assigned BESAs */}
               {formData.besas && formData.besas.length > 0 ? (
                 <div className="space-y-2 mb-3">
-                  {formData.besas.map((besa, index) => (
+                  {formatBesas(formData.besas).map((besa, index) => (
                     <div key={`${besa}-${index}`} className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
                       <div className="flex-1 text-sm text-green-800">
                         ✓ {besa} (auto-assigned)

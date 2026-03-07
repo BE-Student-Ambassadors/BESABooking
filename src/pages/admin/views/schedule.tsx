@@ -766,7 +766,21 @@ export default function ScheduleView() {
                 {selectedBooking.besas && (
                   <div>
                     <span className="text-sm font-medium text-gray-700">Assigned BESA:</span>
-                    <p className="text-sm text-gray-900">{selectedBooking.besas}</p>
+                    <p className="text-sm text-gray-900">
+                      {Array.isArray(selectedBooking.besas)
+                        ? selectedBooking.besas
+                            .map((b) => {
+                              if (typeof b === 'string') return b;
+                              if (b && typeof b === 'object') {
+                                if ('name' in b && typeof (b as any).name === 'string') return (b as any).name;
+                                if ('email' in b && typeof (b as any).email === 'string') return (b as any).email;
+                              }
+                              return String(b);
+                            })
+                            .filter(Boolean)
+                            .join(', ')
+                        : String(selectedBooking.besas)}
+                    </p>
                   </div>
                 )}
                 {selectedBooking.interests && selectedBooking.interests.length > 0 && (
