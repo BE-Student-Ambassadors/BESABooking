@@ -4,11 +4,13 @@ import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase
 import { db } from '../../../../src/firebase.ts';
 // import { mockBesas } from '../../../../data/mockData.ts';
 
+type RoleType = 'BESA' | 'BESA Lead' | 'BESAs On-Call';
+
 type BesaType = {
   id: string;          
   name: string;
   email: string;
-  role: string;
+  role: RoleType | string; // keep string to tolerate legacy data
   status: string;
   toursThisWeek?: number;
   totalTours?: number;
@@ -38,12 +40,29 @@ export default function BESAManagementView() {
   const [selectedBesa, setSelectedBesa] = useState<string | null>(null);
   const [viewingBesaTours, setViewingBesaTours] = useState<string | null>(null);
   const [showNewBesaModal, setShowNewBesaModal] = useState(false);
-  const [newBesa, setNewBesa] = useState({
+  const [newBesa, setNewBesa] = useState<{
+    name: string;
+    email: string;
+    role: RoleType;
+    status: string;
+  }>({
     name: '',
     email: '',
     role: 'BESA',
     status: 'active',
   });
+
+  const getRoleBadgeClass = (role: string) => {
+    switch (role) {
+      case 'BESA Lead':
+        return 'bg-blue-100 text-blue-800';
+      case 'BESAs On-Call':
+        return 'bg-amber-100 text-amber-800';
+      case 'BESA':
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   {/* Fetch BESAS & Booking Info */}
   useEffect(() => {
@@ -253,8 +272,7 @@ export default function BESAManagementView() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${besa.role === 'BESA Lead' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeClass(besa.role)}`}>
                       {besa.role}
                     </span>
                   </td>
@@ -323,7 +341,7 @@ export default function BESAManagementView() {
                 </button>
                 <div className="text-sm text-gray-500 truncate">{besa.email}</div>
               </div>
-              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${besa.role === 'BESA Lead' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeClass(besa.role)}`}>
                 {besa.role}
               </span>
             </div>
@@ -505,6 +523,7 @@ export default function BESAManagementView() {
                     >
                       <option value="BESA">BESA</option>
                       <option value="BESA Lead">BESA Lead</option>
+                      <option value="BESAs On-Call">BESAs On-Call</option>
                     </select>
                   </div>
                   <div>
@@ -584,6 +603,7 @@ export default function BESAManagementView() {
                 >
                   <option value="BESA">BESA</option>
                   <option value="BESA Lead">BESA Lead</option>
+                  <option value="BESAs On-Call">BESAs On-Call</option>
                 </select>
               </div>
               <div>

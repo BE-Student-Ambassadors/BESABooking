@@ -247,6 +247,13 @@ export default function DashboardView() {
     );
   };
 
+  const rolePriority = (role?: string) => {
+    const normalized = (role || '').toLowerCase();
+    if (normalized === 'besa') return 0;
+    if (normalized === 'besas on-call' || normalized === 'besa on-call') return 1;
+    return 2; // BESA Lead or any other role
+  };
+
   const formatBesas = (besas?: any[]) =>
     (besas || [])
       .map(normalizeBesaEntry)
@@ -254,7 +261,15 @@ export default function DashboardView() {
 
   // Auto-assign all available BESAs to a booking
   const autoAssignBesas = (bookingData: BookingData) => {
-    const availableBesas = getAvailableBesas(bookingData);
+    const availableBesas = getAvailableBesas(bookingData)
+      .slice()
+      .sort((a, b) => {
+        const priorityDiff = rolePriority(a.role) - rolePriority(b.role);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (a.name || '').localeCompare(b.name || '');
+      })
+      .slice(0, 2); // cap at two assignments
+
     return {
       ...bookingData,
       besas: availableBesas.map(besa => besa.name)
