@@ -609,17 +609,32 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     durationMinutes = 0
   ) => {
     if (!bookingDate || !bookingTime) return [];
+    const normalizeRole = (role?: string) => (role || "").toLowerCase();
 
-    return besas
-      .filter(
-        (besa) =>
-          besa.status === "active" &&
-          isBesaAvailable(besa, bookingDate, bookingTime, durationMinutes)
-      )
-      .map((besa) => ({
-        name: besa.name,
-        email: besa.email,
-      }));
+    const availableBesas = besas.filter(
+      (besa) =>
+        besa.status === "active" &&
+        isBesaAvailable(besa, bookingDate, bookingTime, durationMinutes)
+    );
+
+    const primaryBesas = availableBesas.filter((besa) => {
+      const role = normalizeRole(besa.role);
+      return role === "besa" || role === "besa lead";
+    });
+
+    const onCallBesas = availableBesas.filter(
+      (besa) => normalizeRole(besa.role) === "besa on-call"
+    );
+
+    const selectedBesas = [
+      ...primaryBesas.slice(0, 2),
+      ...onCallBesas.slice(0, Math.max(0, 2 - primaryBesas.length)),
+    ].slice(0, 2);
+
+    return selectedBesas.map((besa) => ({
+      name: besa.name,
+      email: besa.email,
+    }));
   };
 
   const toDateOnly = (value: any): Date | null => {
