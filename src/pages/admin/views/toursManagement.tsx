@@ -466,51 +466,47 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
         <div>
           <label className="flex items-center space-x-2">
             <input
-              type="checkbox"
-              checked={dateOverride.unavailable}
-              onChange={(e) => {
-                const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                newDateSpecific[index] = { 
-                  ...dateOverride, 
-                  unavailable: e.target.checked,
-                  appliesToAllTours: e.target.checked, // holiday means universal
-                  slots: e.target.checked ? [] : dateOverride.slots
-                };
-                updateTour({ dateSpecificBlockDays: newDateSpecific });
-              }}
-              className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-            />
-            <span className="text-sm text-gray-700">Mark as unavailable (holiday/closed)</span>
-          </label>
+            type="checkbox"
+            checked={dateOverride.unavailable}
+            onChange={(e) => {
+              const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+              newDateSpecific[index] = { 
+                ...dateOverride, 
+                unavailable: e.target.checked
+              };
+              updateTour({ dateSpecificBlockDays: newDateSpecific });
+            }}
+            className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+          />
+          <span className="text-sm text-gray-700">Entire day is unavailable (holiday/closed)</span>
+        </label>
 
-          {dateOverride.unavailable && (
-            <div className="mt-2 flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
-                  newDateSpecific[index] = {
-                    ...dateOverride,
-                    appliesToAllTours: !(dateOverride.appliesToAllTours ?? true)
-                  };
-                  updateTour({ dateSpecificBlockDays: newDateSpecific });
-                }}
-                className={`px-2 py-1 rounded-lg text-xs font-medium ${
-                  dateOverride.appliesToAllTours
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                {dateOverride.appliesToAllTours ? 'Universal: ON' : 'Universal: OFF'}
-              </button>
-              <span className="text-xs text-gray-600">Applies to all tours</span>
-            </div>
-          )}
+        <div className="mt-2 flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => {
+              const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+              newDateSpecific[index] = {
+                ...dateOverride,
+                appliesToAllTours: !(dateOverride.appliesToAllTours ?? true)
+              };
+              updateTour({ dateSpecificBlockDays: newDateSpecific });
+            }}
+            className={`px-2 py-1 rounded-lg text-xs font-medium ${
+              dateOverride.appliesToAllTours
+                ? 'bg-blue-100 text-blue-700'
+                : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {dateOverride.appliesToAllTours ? 'Universal: ON' : 'Universal: OFF'}
+          </button>
+          <span className="text-xs text-gray-600">Applies to all tours</span>
         </div>
+      </div>
 
-        {!dateOverride.unavailable && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
+      {!dateOverride.unavailable && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">Custom Time Slots</label>
               <button
                 type="button"
@@ -1214,9 +1210,16 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   const [searchTerm] = useState('');
   const [filterStatus] = useState<'all' | 'published' | 'draft'>('all');
   const [reordering, setReordering] = useState(false);
-  const [globalHolidayForm, setGlobalHolidayForm] = useState<{ startDate: string; endDate: string }>({
+  const [globalHolidayForm, setGlobalHolidayForm] = useState<{
+    startDate: string;
+    endDate: string;
+    unavailable: boolean;
+    slots: { start: string; end: string }[];
+  }>({
     startDate: '',
-    endDate: ''
+    endDate: '',
+    unavailable: true,
+    slots: [{ start: '12:00', end: '17:00' }],
   });
 
   const sortByDisplayOrder = (a: Tour, b: Tour) =>
@@ -1345,12 +1348,12 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   const orderedFilteredTours = [...filteredTours].sort(sortByDisplayOrder);
 
   const universalOverrides = useMemo(() => {
-    const map: Record<string, { startDate: string; endDate?: string }> = {};
+    const map: Record<string, { startDate: string; endDate?: string; unavailable?: boolean; slots?: any[] }> = {};
     tours.forEach((tour) => {
       (tour.dateSpecificBlockDays || []).forEach((d) => {
-        if (d.appliesToAllTours && d.unavailable) {
+        if (d.appliesToAllTours && (d.unavailable || (d.slots && d.slots.length))) {
           const key = `${d.startDate}|${d.endDate || d.startDate}`;
-          map[key] = { startDate: d.startDate, endDate: d.endDate };
+          map[key] = { startDate: d.startDate, endDate: d.endDate, unavailable: d.unavailable, slots: d.slots || [] };
         }
       });
     });
@@ -1362,11 +1365,14 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
       alert('Please select a start date');
       return;
     }
+    const slots = globalHolidayForm.unavailable
+      ? []
+      : (globalHolidayForm.slots || []).filter((s) => s.start && s.end);
     const newOverride = {
       startDate: globalHolidayForm.startDate,
       endDate: globalHolidayForm.endDate || globalHolidayForm.startDate,
-      slots: [],
-      unavailable: true,
+      slots,
+      unavailable: globalHolidayForm.unavailable,
       appliesToAllTours: true,
     };
 
@@ -1378,7 +1384,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
           const exists = existing.some(
             (d) =>
               d.appliesToAllTours &&
-              d.unavailable &&
+              d.unavailable === newOverride.unavailable &&
               d.startDate === newOverride.startDate &&
               (d.endDate || d.startDate) === (newOverride.endDate || newOverride.startDate)
           );
@@ -1395,7 +1401,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
             ...(tour.dateSpecificBlockDays || []).some(
               (d: any) =>
                 d.appliesToAllTours &&
-                d.unavailable &&
+                d.unavailable === newOverride.unavailable &&
                 d.startDate === newOverride.startDate &&
                 (d.endDate || d.startDate) === (newOverride.endDate || newOverride.startDate)
             )
@@ -1404,7 +1410,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
           ],
         }))
       );
-      setGlobalHolidayForm({ startDate: '', endDate: '' });
+      setGlobalHolidayForm({ startDate: '', endDate: '', unavailable: true, slots: [{ start: '12:00', end: '17:00' }] });
     } catch (err) {
       console.error('Error adding universal holiday:', err);
       alert('Failed to add universal holiday date.');
@@ -1420,7 +1426,6 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
             (d) =>
               !(
                 d.appliesToAllTours &&
-                d.unavailable &&
                 d.startDate === startDate &&
                 (d.endDate || d.startDate) === (endDate || startDate)
               )
@@ -1435,7 +1440,6 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
             (d: any) =>
               !(
                 d.appliesToAllTours &&
-                d.unavailable &&
                 d.startDate === startDate &&
                 (d.endDate || d.startDate) === (endDate || startDate)
               )
@@ -1633,6 +1637,86 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                     setGlobalHolidayForm((prev) => ({ ...prev, endDate: e.target.value }))
                   }
                 />
+                <label className="flex items-center space-x-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    checked={globalHolidayForm.unavailable}
+                    onChange={(e) =>
+                      setGlobalHolidayForm((prev) => ({
+                        ...prev,
+                        unavailable: e.target.checked,
+                        slots: e.target.checked ? [] : (prev.slots.length ? prev.slots : [{ start: '12:00', end: '17:00' }])
+                      }))
+                    }
+                  />
+                  <span>Entire day is unavailable (holiday/closed)</span>
+                </label>
+
+                {!globalHolidayForm.unavailable && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-gray-700">Custom Time Slots</label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setGlobalHolidayForm((prev) => ({
+                            ...prev,
+                            slots: [...prev.slots, { start: '12:00', end: '17:00' }]
+                          }))
+                        }
+                        className="text-blue-600 hover:bg-blue-50 p-1 rounded-lg"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {globalHolidayForm.slots.length === 0 && (
+                      <p className="text-xs text-gray-500">No slots set; will use weekly hours.</p>
+                    )}
+                    {globalHolidayForm.slots.map((slot, idx) => (
+                      <div key={idx} className="flex items-center space-x-2">
+                        <input
+                          type="time"
+                          className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                          value={slot.start}
+                          onChange={(e) =>
+                            setGlobalHolidayForm((prev) => {
+                              const slots = [...prev.slots];
+                              slots[idx] = { ...slot, start: e.target.value };
+                              return { ...prev, slots };
+                            })
+                          }
+                        />
+                        <span className="text-gray-500 text-xs">to</span>
+                        <input
+                          type="time"
+                          className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                          value={slot.end}
+                          onChange={(e) =>
+                            setGlobalHolidayForm((prev) => {
+                              const slots = [...prev.slots];
+                              slots[idx] = { ...slot, end: e.target.value };
+                              return { ...prev, slots };
+                            })
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setGlobalHolidayForm((prev) => ({
+                              ...prev,
+                              slots: prev.slots.filter((_, i) => i !== idx)
+                            }))
+                          }
+                          className="text-red-600 hover:bg-red-50 p-1 rounded-lg"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <button
                   onClick={addUniversalHoliday}
                   className="w-full mt-2 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium"
@@ -1652,10 +1736,20 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                         key={`${d.startDate}|${d.endDate || d.startDate}`}
                         className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm"
                       >
-                        <span className="text-gray-800">
-                          {d.startDate}
-                          {d.endDate && d.endDate !== d.startDate ? ` → ${d.endDate}` : ''}
-                        </span>
+                        <div className="text-gray-800 flex-1">
+                          <div>
+                            {d.startDate}
+                            {d.endDate && d.endDate !== d.startDate ? ` → ${d.endDate}` : ''}
+                          </div>
+                          {d.slots && d.slots.length > 0 && (
+                            <div className="text-xs text-gray-600 mt-1">
+                              {d.slots.map((s: any, i: number) => (
+                                <span key={i} className="inline-block mr-2">{s.start} - {s.end}</span>
+                              ))}
+                            </div>
+                          )}
+                          {d.unavailable && <div className="text-xs text-red-600">Unavailable</div>}
+                        </div>
                         <button
                           onClick={() => removeUniversalHoliday(d.startDate, d.endDate)}
                           className="text-red-600 hover:text-red-800 text-xs"
