@@ -1109,10 +1109,6 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
           <p className="text-gray-600">Select the tour that best matches your interests and preferred date</p>
         </div>
 
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4 text-sm text-yellow-900">
-          More tours for April - June will be announced shortly. Please check back on March 23rd for new availability.
-        </div>
-
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Tours</h3>
           <div className="grid gap-6">
@@ -1388,6 +1384,16 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       updateBookingData("maxAttendees", finalSize);
     };
 
+    const handleGroupSizeInput = (value: string) => {
+      // Allow quick manual entry for large groups while keeping limits
+      const parsed = parseInt(value, 10);
+      if (Number.isNaN(parsed)) {
+        updateBookingData("maxAttendees", 1);
+        return;
+      }
+      updateGroupSize(parsed);
+    };
+
     // Get remaining spots for display (optional)
     const getRemainingSpots = (time: string) => {
       const date = bookingData.date;
@@ -1458,35 +1464,21 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         {/* Group Size Selection */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Size</h3>
-          <div className="flex items-center justify-center sm:justify-start space-x-6">
-            <button
-              type="button"
-              onClick={() => updateGroupSize(bookingData.maxAttendees - 1)}
-              disabled={bookingData.maxAttendees <= 1}
-              className="w-12 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xl font-bold"
-            >
-              -
-            </button>
-            <div className="text-center">
-              <span className="text-3xl font-semibold text-gray-900 block">
-                {bookingData.maxAttendees}
-              </span>
-              <span className="text-sm text-gray-500">
-                {bookingData.maxAttendees === 1 ? 'person' : 'people'}
-              </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <input
+              type="number"
+              min={1}
+              max={selected.maxAttendeesPerBooking || 15}
+              value={bookingData.maxAttendees}
+              onChange={(e) => handleGroupSizeInput(e.target.value)}
+              className="w-full sm:w-48 px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg text-center"
+              inputMode="numeric"
+            />
+            <div className="text-sm text-gray-600">
+              <p className="font-medium">Enter the total number of people</p>
+              <p>Maximum {selected.maxAttendeesPerBooking} per tour</p>
             </div>
-            <button
-              type="button"
-              onClick={() => updateGroupSize(bookingData.maxAttendees + 1)}
-              disabled={bookingData.maxAttendees >= (selected.maxAttendeesPerBooking || 15)}
-              className="w-12 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-xl font-bold"
-            >
-              +
-            </button>
           </div>
-          <p className="text-left text-sm text-gray-500 mt-2">
-            Maximum {selected.maxAttendeesPerBooking} people per tour
-          </p>
           {errors.maxAttendees && (
             <p className="text-red-500 text-sm mt-2 text-left">{errors.maxAttendees}</p>
           )}
