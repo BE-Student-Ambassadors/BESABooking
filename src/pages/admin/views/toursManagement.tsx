@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Dispatch, SetStateAction } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, Bell, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
@@ -1205,7 +1205,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   onCreateTour: () => void; 
   onEditTour: (tour: Tour) => void;
   tours: Tour[];
-  setTours: (tours: Tour[]) => void;
+  setTours: Dispatch<SetStateAction<Tour[]>>;
 }) {
   const [searchTerm] = useState('');
   const [filterStatus] = useState<'all' | 'published' | 'draft'>('all');
