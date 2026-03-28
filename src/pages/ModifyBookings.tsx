@@ -218,23 +218,64 @@ const ModifyBookingsPage: React.FC = () => {
       return false;
     };
 
+    // Check for conflicting bookings on the same date/time (any tour)
+    const hasConflict = async (dateVal: string, timeLabel: string, currentId: string | null) => {
+      const bookingsCol = collection(db, "Bookings");
+      const qSnap = await getDocs(query(bookingsCol, where("date", "==", dateVal)));
+      return qSnap.docs.some((d) => {
+        if (d.id === currentId) return false;
+        const data = d.data() as BookingDoc;
+        const bookedTime = data.time || data.startTime;
+        if (!bookedTime) return false;
+        return toMinutes(bookedTime) === toMinutes(timeLabel);
+      });
+    };
+
+    const generateSlots = (start: string, end: string, durationMins: number, freqMins: number) => {
+      const startM = toMinutes(start);
+      const endM = toMinutes(end);
+      if (startM < 0 || endM < 0 || durationMins <= 0 || freqMins <= 0) return [] as number[];
+      const slots: number[] = [];
+      for (let m = startM; m + durationMins <= endM; m += freqMins) {
+        slots.push(m);
+      }
+      return slots;
+    };
+
     const hasSlotForDateTime = (dt: Date, formatted: string, t: Tour) => {
       const weekday = dt.toLocaleDateString("en-US", { weekday: "long" });
       const minutes = toMinutes(formatted);
       if (minutes < 0) return false;
 
-      // check date-specific slots first
+      const durationMinutes =
+        t.durationUnit === "hours" || t.durationUnit === "hour"
+          ? (t.duration || 0) * 60
+          : t.duration || 0;
+      const freqMinutes =
+        t.frequencyUnit === "hours" || t.frequencyUnit === "hour"
+          ? (t.frequency || 0) * 60
+          : t.frequency || durationMinutes || 60;
+
+      // check date-specific slots first (if a range with slots is present)
       const override = (t.dateSpecificBlockDays || []).find(d => {
         const start = new Date(d.startDate + "T00:00:00");
         const end = new Date((d.endDate || d.startDate) + "T23:59:59");
         return dt >= start && dt <= end;
       });
-      const slots = override?.slots?.length ? override.slots : t.weeklyHours?.[weekday] || [];
-      if (!slots || slots.length === 0) return false;
-      return slots.some(s => {
-        const startM = toMinutes(s.start);
-        const endM = toMinutes(s.end);
-        return startM <= minutes && minutes <= endM;
+
+      const slotWindows = override?.slots?.length
+        ? override.slots
+        : t.weeklyHours?.[weekday] || [];
+
+      if (!slotWindows || slotWindows.length === 0) return false;
+
+      // Require an exact generated slot match (prevents arbitrary times inside a window)
+      return slotWindows.some((window) => {
+        const startM = toMinutes(window.start);
+        const endM = toMinutes(window.end);
+        if (startM < 0 || endM < 0) return false;
+        const generated = generateSlots(window.start, window.end, durationMinutes, freqMinutes);
+        return generated.includes(minutes);
       });
     };
 
@@ -273,6 +314,13 @@ const ModifyBookingsPage: React.FC = () => {
         setError("Selected time is outside available hours for that date/tour.");
         return;
       }
+    }
+
+    // Prevent overlapping with any other tour at the same time
+    const conflict = await hasConflict(date, formattedTime, bookingId);
+    if (conflict) {
+      setError("That time is already booked for another tour. Please choose a different time.");
+      return;
     }
 
     setSaving(true);
