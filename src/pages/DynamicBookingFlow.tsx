@@ -1426,6 +1426,12 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Time Slots</h3>
+          <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+            <p>
+              Each time slot reserves one family. You can include up to 5 family members in a single booking.
+            </p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {availableTimes.length > 0 ? (
               availableTimes.map((time) => {
