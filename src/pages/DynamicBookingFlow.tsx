@@ -1687,7 +1687,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
         <div className="bg-gray-50 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-3">
-            accommodations & Special Requests
+            Accommodations & Special Requests
           </h3>
           <p className="text-sm text-gray-600 mb-3">
             Tell us about any accommodations we should prepare.
