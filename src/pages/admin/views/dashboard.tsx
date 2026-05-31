@@ -206,6 +206,23 @@ export default function DashboardView() {
     })
     .sort((a, b) => toDateTime(a.date, a.time || a.startTime).getTime() - toDateTime(b.date, b.time || b.startTime).getTime());
 
+  const isModifiedBooking = (booking: BookingData) => {
+    return Boolean(booking.modificationReason?.trim());
+  };
+
+  const normalizedEmailCounts = bookings.reduce<Record<string, number>>((counts, booking) => {
+    const normalizedEmail = booking.email?.trim().toLowerCase();
+    if (!normalizedEmail) return counts;
+    counts[normalizedEmail] = (counts[normalizedEmail] || 0) + 1;
+    return counts;
+  }, {});
+
+  const hasDuplicateEmail = (booking: BookingData) => {
+    const normalizedEmail = booking.email?.trim().toLowerCase();
+    if (!normalizedEmail) return false;
+    return (normalizedEmailCounts[normalizedEmail] || 0) > 1;
+  };
+
   // Flag tours that have already occurred so we can gray them out visually
   const isBookingPast = (booking: BookingData) => {
     if (!booking?.date) return false;
@@ -457,6 +474,13 @@ export default function DashboardView() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {booking.date}
                       <div className="text-sm text-gray-500">{booking.time}</div>
+                      {isModifiedBooking(booking) && (
+                        <div className="mt-1">
+                          <span className="inline-block rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                            Modified
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {booking.besas && booking.besas.length > 0 ? (
@@ -477,6 +501,13 @@ export default function DashboardView() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {booking.firstName} {booking.lastName}
                       <div className="text-sm text-gray-500">{booking.email}</div>
+                      {hasDuplicateEmail(booking) && (
+                        <div className="mt-1">
+                          <span className="inline-block rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700">
+                            Duplicate email
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex gap-2">
@@ -529,6 +560,11 @@ export default function DashboardView() {
                       {booking.date}
                       {booking.time && <span className="text-gray-500"> · {booking.time}</span>}
                     </p>
+                    {isModifiedBooking(booking) && (
+                      <span className="mt-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                        Modified
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -554,7 +590,14 @@ export default function DashboardView() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-gray-500 w-20">Email</span>
-                    <span className="text-gray-700 break-all">{booking.email || '—'}</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-gray-700 break-all">{booking.email || '—'}</span>
+                      {hasDuplicateEmail(booking) && (
+                        <span className="inline-flex w-fit rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700">
+                          Duplicate email
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-gray-500 w-20">BESAs</span>
@@ -658,7 +701,7 @@ export default function DashboardView() {
                 )}
                 {viewingBooking.modificationReason && (
                   <p className="text-gray-700 mt-1">
-                    Reschedule/Cancellation Reason: {viewingBooking.modificationReason}
+                    Notes About This Change: {viewingBooking.modificationReason}
                   </p>
                 )}
               </div>

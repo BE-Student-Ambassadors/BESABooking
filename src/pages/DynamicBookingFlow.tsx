@@ -342,47 +342,64 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
   // Calendar Display for Section 1
   const CustomCalendar: React.FC<CustomCalendarProps> = ({ selectedDate, onDateSelect, tourData, isDateAvailable, minDate, maxDate }) => {
-    const [currentMonth, setCurrentMonth] = useState(new Date());
-
-    const getDaysInMonth = (date: Date) => {
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-      const daysInMonth = lastDay.getDate();
-      const startingDayOfWeek = firstDay.getDay();
-
-      return { daysInMonth, startingDayOfWeek, year, month };
+    const startOfWeek = (date: Date) => {
+      const base = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      base.setDate(base.getDate() - base.getDay());
+      return base;
     };
 
-    const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
+    const addDays = (date: Date, days: number) => {
+      const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      next.setDate(next.getDate() + days);
+      return next;
+    };
 
-    // Keep calendar view in sync with selected date (prevents jumping back to today)
+    const formatDateString = (date: Date): string => {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
+    const getInitialWeekStart = () => {
+      if (selectedDate) {
+        const [y, m, d] = selectedDate.split("-").map(Number);
+        if (y && m && d) return startOfWeek(new Date(y, m - 1, d));
+      }
+      if (minDate) {
+        return startOfWeek(new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()));
+      }
+      return startOfWeek(new Date());
+    };
+
+    const [currentWeekStart, setCurrentWeekStart] = useState(getInitialWeekStart);
+
     useEffect(() => {
       if (!selectedDate) return;
-      const [y, m] = selectedDate.split('-').map(Number);
-      if (!y || !m) return;
-      const target = new Date(y, (m ?? 1) - 1, 1);
-      if (target.getMonth() !== currentMonth.getMonth() || target.getFullYear() !== currentMonth.getFullYear()) {
-        setCurrentMonth(target);
+      const [y, m, d] = selectedDate.split("-").map(Number);
+      if (!y || !m || !d) return;
+      const targetWeek = startOfWeek(new Date(y, m - 1, d));
+      if (targetWeek.getTime() !== currentWeekStart.getTime()) {
+        setCurrentWeekStart(targetWeek);
       }
-    }, [selectedDate, currentMonth]);
+    }, [selectedDate, currentWeekStart]);
 
-    const previousMonth = () => {
-      setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
-    };
+    const mobileDays = Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index));
+    const displayedDays = Array.from({ length: 14 }, (_, index) => addDays(currentWeekStart, index));
+    const periodEnd = displayedDays[13];
+    const mobilePeriodEnd = mobileDays[6];
+    const previousMobileWeekStart = addDays(currentWeekStart, -7);
+    const nextMobileWeekStart = addDays(currentWeekStart, 7);
+    const previousDesktopPeriodStart = addDays(currentWeekStart, -14);
+    const nextDesktopPeriodStart = addDays(currentWeekStart, 14);
+    const monthRangeLabel = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+    const fullMonthLabel = new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      year: "numeric",
+    });
 
-    const nextMonth = () => {
-      setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
-    };
-
-    const formatDateString = (year: number, month: number, day: number): string => {
-      return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    };
-
-    const isDateDisabled = (day: number): boolean => {
-      const dateStr = formatDateString(year, month, day);
-      const dateObj = new Date(year, month, day);
+    const isDateDisabled = (dateObj: Date): boolean => {
+      const dateStr = formatDateString(dateObj);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -409,96 +426,187 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       return !validation.available;
     };
 
-    const monthNames = ["January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"];
-
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-    // Create array of days to render
-    const days: (number | null)[] = [];
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(day);
-    }
+    const minWeekStart = minDate
+      ? startOfWeek(new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()))
+      : null;
+    const maxDateTime = maxDate
+      ? new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate(), 23, 59, 59, 999)
+      : null;
+    const canGoPreviousMobile = !minWeekStart || previousMobileWeekStart >= minWeekStart;
+    const canGoNextMobile = !maxDateTime || nextMobileWeekStart <= maxDateTime;
+    const canGoPreviousDesktop = !minWeekStart || previousDesktopPeriodStart >= minWeekStart;
+    const canGoNextDesktop = !maxDateTime || nextDesktopPeriodStart <= maxDateTime;
 
     return (
       <div className="border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
         {/* Calendar Header */}
-        <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={previousMonth}
-            className="p-2 hover:bg-blue-500 hover:text-white rounded-lg transition-all text-blue-600"
-            type="button"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
+        <div className="mb-6 flex justify-center">
           <div className="flex flex-col items-center gap-1">
             <h3 className="text-xl font-bold text-blue-600">
-              {monthNames[month]} {year}
+              {fullMonthLabel.format(currentWeekStart)}
             </h3>
+            <p className="hidden text-sm text-gray-500 sm:block">
+              {monthRangeLabel.format(currentWeekStart)} - {monthRangeLabel.format(periodEnd)}
+            </p>
           </div>
+        </div>
+
+        <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          Select from the available booking dates.
+        </div>
+
+        {/* Mobile calendar */}
+        <div className="sm:hidden">
+          <div className="mb-3 flex items-center justify-between">
+            <button
+              onClick={() => canGoPreviousMobile && setCurrentWeekStart(previousMobileWeekStart)}
+              className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
+              type="button"
+              disabled={!canGoPreviousMobile}
+              aria-label="Previous week"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <span className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+              {monthRangeLabel.format(currentWeekStart)} - {monthRangeLabel.format(mobilePeriodEnd)}
+            </span>
+            <button
+              onClick={() => canGoNextMobile && setCurrentWeekStart(nextMobileWeekStart)}
+              className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
+              type="button"
+              disabled={!canGoNextMobile}
+              aria-label="Next week"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory">
+            {mobileDays.map((dateObj) => {
+              const dateStr = formatDateString(dateObj);
+              const isSelected = selectedDate === dateStr;
+              const isDisabled = isDateDisabled(dateObj);
+              const weekdayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+              const monthLabel = dateObj.toLocaleDateString("en-US", { month: "short" });
+              const dayNumber = dateObj.getDate();
+
+              return (
+                <button
+                  key={`mobile-${dateStr}`}
+                  type="button"
+                  onClick={() => !isDisabled && onDateSelect(dateStr)}
+                  disabled={isDisabled}
+                  className={`
+                  min-h-[88px] min-w-[72px] snap-start rounded-xl border px-2 py-2 text-center transition-all
+                  ${isSelected
+                      ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500 border-blue-500'
+                      : ''
+                    }
+                  ${!isSelected && !isDisabled
+                      ? 'bg-blue-50 text-gray-800 border-blue-200'
+                      : ''
+                    }
+                  ${isDisabled
+                      ? 'text-gray-300 cursor-not-allowed bg-gray-50 border-gray-200 opacity-60'
+                      : 'cursor-pointer'
+                    }
+                `}
+                >
+                  <div className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${isSelected ? 'text-blue-100' : 'text-blue-700'}`}>
+                    {weekdayLabel}
+                  </div>
+                  <div className="mt-2 text-2xl font-bold leading-none">
+                    {dayNumber}
+                  </div>
+                  <div className={`mt-1 text-xs ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {monthLabel}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tablet/Desktop calendar */}
+        <div className="hidden items-center gap-3 sm:flex">
           <button
-            onClick={nextMonth}
-            className="p-2 hover:bg-blue-500 hover:text-white rounded-lg transition-all text-blue-600"
+            onClick={() => canGoPreviousDesktop && setCurrentWeekStart(previousDesktopPeriodStart)}
+            className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
             type="button"
+            disabled={!canGoPreviousDesktop}
+            aria-label="Previous week"
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
-        </div>
 
-        {/* Day Names */}
-        <div className="grid grid-cols-7 gap-2 mb-3">
-          {dayNames.map(day => (
-            <div key={day} className="text-center text-sm font-semibold text-blue-700 py-2">
-              {day}
-            </div>
-          ))}
-        </div>
+          <div className="grid flex-1 grid-cols-7 gap-2 overflow-x-auto pb-2">
+            {displayedDays.map((dateObj) => {
+              const dateStr = formatDateString(dateObj);
+              const isSelected = selectedDate === dateStr;
+              const isDisabled = isDateDisabled(dateObj);
+              const weekdayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+              const monthLabel = dateObj.toLocaleDateString("en-US", { month: "short" });
+              const dayNumber = dateObj.getDate();
 
-        {/* Calendar Days */}
-        <div className="grid grid-cols-7 gap-2">
-          {days.map((day, idx) => {
-            if (day === null) {
-              return <div key={`empty-${idx}`} className="aspect-square" />;
-            }
+              return (
+                <button
+                  key={dateStr}
+                  type="button"
+                  onClick={() => !isDisabled && onDateSelect(dateStr)}
+                  disabled={isDisabled}
+                  className={`
+                  min-h-[74px] min-w-[74px] rounded-xl border px-2.5 py-2 text-left transition-all
+                  ${isSelected
+                      ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500 border-blue-500'
+                      : ''
+                    }
+                  ${!isSelected && !isDisabled
+                      ? 'bg-blue-50 hover:bg-blue-100 text-gray-800 border-blue-200 hover:border-blue-400'
+                      : ''
+                    }
+                  ${isDisabled
+                      ? 'text-gray-300 cursor-not-allowed bg-gray-50 border-gray-200 opacity-60'
+                      : 'cursor-pointer'
+                    }
+                `}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className={`text-xs font-semibold uppercase tracking-[0.2em] ${isSelected ? 'text-blue-100' : 'text-blue-700'}`}>
+                        {weekdayLabel}
+                      </div>
+                      <div className="mt-1 text-xl font-bold leading-none">
+                        {dayNumber}
+                      </div>
+                    <div className={`mt-1 text-xs ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
+                      {monthLabel}
+                    </div>
+                  </div>
+                  {!isDisabled && (
+                      <span className={`rounded-full px-1 py-0.5 text-[9px] font-semibold leading-none ${isSelected ? 'bg-white/20 text-white' : 'bg-white text-blue-700'}`}>
+                        Open
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-            const dateStr = formatDateString(year, month, day);
-            const isSelected = selectedDate === dateStr;
-            const isDisabled = isDateDisabled(day);
-
-            return (
-              <button
-                key={day}
-                type="button"
-                onClick={() => !isDisabled && onDateSelect(dateStr)}
-                disabled={isDisabled}
-                className={`
-                aspect-square p-3 rounded-lg text-sm font-semibold transition-all
-                ${isSelected
-                    ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500'
-                    : ''
-                  }
-                ${!isSelected && !isDisabled
-                    ? 'bg-blue-50 hover:bg-blue-100 text-gray-800 border border-blue-200 hover:border-blue-400'
-                    : ''
-                  }
-                ${isDisabled
-                    ? 'text-gray-300 cursor-not-allowed bg-gray-50 opacity-50'
-                    : 'cursor-pointer'
-                  }
-              `}
-              >
-                {day}
-              </button>
-            );
-          })}
+          <button
+            onClick={() => canGoNextDesktop && setCurrentWeekStart(nextDesktopPeriodStart)}
+            className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
+            type="button"
+            disabled={!canGoNextDesktop}
+            aria-label="Next week"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Legend */}
         {tourData && (
-          <div className="mt-6 pt-4 border-t-2 border-blue-200 flex items-center justify-center gap-6 text-sm">
+          <div className="mt-6 flex items-center justify-center gap-4 border-t-2 border-blue-200 pt-4 text-sm sm:gap-6">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 rounded-lg bg-blue-500 shadow-md ring-2 ring-blue-500"></div>
               <span className="font-medium text-blue-800">Selected</span>
@@ -1104,13 +1212,8 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
     return (
       <div className="space-y-8">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Choose Your Tour Experience</h2>
-          <p className="text-gray-600">Select the tour that best matches your interests and preferred date</p>
-        </div>
 
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">Available Tours</h3>
           <div className="grid gap-6">
             {selectedTour ? (
               // Show only the selected tour
@@ -1432,7 +1535,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
               Each time slot reserves one family. You can include up to 5 family members in a single booking.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             {availableTimes.length > 0 ? (
               availableTimes.map((time) => {
                 const remainingSpots = getRemainingSpots(time);
@@ -1443,12 +1546,12 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
                       updateBookingData("startTime", time);
                       updateBookingData("time", time);
                     }}
-                    className={`p-4 border-2 rounded-lg text-center transition-all hover:shadow-md ${bookingData.startTime === time
+                    className={`p-3 border-2 rounded-lg text-center transition-all hover:shadow-md ${bookingData.startTime === time
                       ? "border-blue-500 bg-blue-50 text-blue-700"
                       : "border-gray-200 hover:border-gray-300"
                       }`}
                   >
-                    <Clock className="w-5 h-5 mx-auto mb-2 text-gray-600" />
+                    <Clock className="w-4 h-4 mx-auto mb-2 text-gray-600" />
                     <span className="font-medium block">{time}</span>
                     {remainingSpots <= 3 && (
                       <span className="text-xs text-orange-600 mt-1 block">
@@ -1481,8 +1584,8 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
               inputMode="numeric"
             />
             <div className="text-sm text-gray-600">
-              <p className="font-medium">Enter the total number of people</p>
-              <p>Maximum {selected.maxAttendeesPerBooking} per tour</p>
+              <p className="font-medium">Enter the total number of attendees.</p>
+              <p>Maximum of {selected.maxAttendeesPerBooking} attendees per tour.</p>
             </div>
           </div>
           {errors.maxAttendees && (
@@ -1495,17 +1598,18 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
   const renderSection3 = () => {
     const majorInterests = [
-      { id: 'computer-science', label: 'B.S. Computer Science' },
-      { id: 'biomolecular-engineering', label: 'B.S. Biomolecular Engineering' },
-      { id: 'bioinformatics', label: 'B.S. Bioinformatics' },
-      { id: 'biotechnology', label: 'B.A. Biotechnology' },
-      { id: 'applied-mathematics', label: 'B.S. Applied Mathematics' },
-      { id: 'network-and-digital-technology', label: 'B.A. Network and Digital Technology' },
-      { id: 'game-design', label: 'B.S. Computer Science: Game Design' },
-      { id: 'tim', label: 'B.S. Technology and Information Management (TIM)' },
-      { id: 'electrical-engineering', label: 'B.S. Electrical Engineering' },
-      { id: 'computer-engineering', label: 'B.S. Computer Engineering' },
-      { id: 'robotics', label: 'B.S. Robotics Engineering' }
+      { id: 'applied-mathematics', label: 'Applied Mathematics' },
+      { id: 'biomolecular-engineering', label: 'Biomolecular Engineering' },
+      { id: 'bioinformatics', label: 'Bioinformatics' },
+      { id: 'biotechnology', label: 'Biotechnology' },
+      { id: 'computer-engineering', label: 'Computer Engineering' },
+      { id: 'computer-science', label: 'Computer Science' },
+      { id: 'computer-science-game-design', label: 'Computer Science: Game Design' },
+      { id: 'computational-media', label: 'Computational Media' },
+      { id: 'electrical-engineering', label: 'Electrical Engineering' },
+      { id: 'network-and-digital-technology', label: 'Network and Digital Technology' },
+      { id: 'robotics-engineering', label: 'Robotics Engineering' },
+      { id: 'tim', label: 'Technology and Information Management (TIM)' }
     ];
 
     const handleInterestChange = (interestId: string, isChecked: boolean) => {

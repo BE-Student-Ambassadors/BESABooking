@@ -367,11 +367,11 @@ const ModifyBookingsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-3xl mx-auto px-4 py-6 flex items-center gap-3">
+        <div className="max-w-3xl mx-auto px-4 py-5 flex items-center gap-3">
           <button onClick={() => navigate("/")} className="text-gray-600 hover:text-gray-900 flex items-center gap-2">
             <ArrowLeft className="w-5 h-5" /> Back
           </button>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Modify Booking</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Modify Booking</h1>
         </div>
       </div>
 
@@ -379,17 +379,23 @@ const ModifyBookingsPage: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm border p-6 space-y-6">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-gray-800">Find Your Booking</label>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <input
-                value={refCode}
-                onChange={(e) => setRefCode(e.target.value)}
-                placeholder="Booking ID"
-                className="rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+            <p className="text-sm text-gray-500">
+             Enter the last name associated with the booking or the confirmation number.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
               <input
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                placeholder="Last name"
+                placeholder="Last Name"
+                className="rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">
+                OR
+              </div>
+              <input
+                value={refCode}
+                onChange={(e) => setRefCode(e.target.value)}
+                placeholder="Confirmation Number"
                 className="rounded-lg border px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -402,9 +408,6 @@ const ModifyBookingsPage: React.FC = () => {
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 <span className="ml-2">Lookup</span>
               </button>
-              <p className="text-xs text-gray-500 sm:pt-3">
-                Enter the booking ID from your confirmation, or last name on booking if you don’t have it.
-              </p>
             </div>
           </div>
 
@@ -449,14 +452,14 @@ const ModifyBookingsPage: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-800">
-                  Reason for reschedule/cancel
+                  Any notes for us about this change?
                 </label>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   rows={3}
                   className="w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Tell us why you're changing this booking"
+                  placeholder="Share anything you'd like us to know about this update."
                 />
               </div>
 
@@ -467,7 +470,7 @@ const ModifyBookingsPage: React.FC = () => {
                   className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition w-full sm:w-auto"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span className="ml-2">{saving ? "Saving..." : "Save Changes"}</span>
+                  <span className="ml-2">{saving ? "Saving..." : "Submit Changes"}</span>
                 </button>
                 <button
                   onClick={handleCancel}
