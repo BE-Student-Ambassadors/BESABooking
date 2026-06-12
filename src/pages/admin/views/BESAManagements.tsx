@@ -12,8 +12,14 @@ type BesaType = {
   email: string;
   role: RoleType | string; // keep string to tolerate legacy data
   status: string;
+  supportedTourIds?: string[];
   toursThisWeek?: number;
   totalTours?: number;
+};
+
+type TourOption = {
+  id: string;
+  title: string;
 };
 
 type BookingData = {
@@ -37,6 +43,7 @@ type BookingData = {
 export default function BESAManagementView() {
   const [besas, setBesas] = useState<BesaType[]>([]);
   const [bookings, setBookings] = useState<BookingData[]>([]);
+  const [tours, setTours] = useState<TourOption[]>([]);
   const [selectedBesa, setSelectedBesa] = useState<string | null>(null);
   const [viewingBesaTours, setViewingBesaTours] = useState<string | null>(null);
   const [showNewBesaModal, setShowNewBesaModal] = useState(false);
@@ -78,10 +85,21 @@ export default function BESAManagementView() {
             email: data.email,
             role: data.role,
             status: data.status,
+            supportedTourIds: Array.isArray(data.supportedTourIds) ? data.supportedTourIds : [],
             toursThisWeek: 0, 
             totalTours: 0, 
           } as BesaType;
         });
+
+        const toursSnapshot = await getDocs(collection(db, "Tours"));
+        const toursData = toursSnapshot.docs.map((tourDoc) => {
+          const data = tourDoc.data() as any;
+          return {
+            id: tourDoc.id,
+            title: typeof data.title === 'string' ? data.title : 'Untitled Tour',
+          };
+        });
+        setTours(toursData);
 
         // Fetch Bookings
         const bookingSnapshot = await getDocs(collection(db, "Bookings"));
@@ -143,6 +161,14 @@ export default function BESAManagementView() {
     );
   };
 
+  const updateBesaSupportedTours = (id: string, supportedTourIds: string[]) => {
+    setBesas(prevBesas =>
+      prevBesas.map(besa =>
+        besa.id === id ? { ...besa, supportedTourIds } : besa
+      )
+    );
+  };
+
   const handleAddNewBesa = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -190,6 +216,7 @@ export default function BESAManagementView() {
         email: besaToUpdate.email,
         role: besaToUpdate.role,
         status: besaToUpdate.status,
+        supportedTourIds: besaToUpdate.supportedTourIds || [],
       });
 
       setSelectedBesa(null); 
@@ -221,6 +248,12 @@ export default function BESAManagementView() {
       year: 'numeric'
     });
   };
+
+  const selectedBesaRecord = selectedBesa
+    ? besas.find((besa) => besa.id === selectedBesa) || null
+    : null;
+  const selectedBesaSupportedTourIds = selectedBesaRecord?.supportedTourIds || [];
+  const selectedBesaHasTourRestrictions = selectedBesaSupportedTourIds.length > 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -484,7 +517,7 @@ export default function BESAManagementView() {
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-2xl font-bold text-gray-900">
-                  Edit BESA: {besas.find(b => b.id === selectedBesa)?.name}
+                  Edit BESA: {selectedBesaRecord?.name}
                 </h3>
                 <button
                   onClick={() => setSelectedBesa(null)}
@@ -501,7 +534,7 @@ export default function BESAManagementView() {
                     <input
                       type="text"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                      value={besas.find(b => b.id === selectedBesa)?.name || ''}
+                      value={selectedBesaRecord?.name || ''}
                       onChange={(e) => updateBesaField(selectedBesa, 'name', e.target.value)}
                     />
                   </div>
@@ -510,7 +543,7 @@ export default function BESAManagementView() {
                     <input
                       type="email"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                      value={besas.find(b => b.id === selectedBesa)?.email || ''}
+                      value={selectedBesaRecord?.email || ''}
                       onChange={(e) => updateBesaField(selectedBesa, 'email', e.target.value)}
                     />
                   </div>
@@ -518,7 +551,7 @@ export default function BESAManagementView() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                     <select
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                      value={besas.find(b => b.id === selectedBesa)?.role || 'BESA'}
+                      value={selectedBesaRecord?.role || 'BESA'}
                       onChange={(e) => updateBesaField(selectedBesa, 'role', e.target.value)}
                     >
                       <option value="BESA">BESA</option>
@@ -530,13 +563,73 @@ export default function BESAManagementView() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                     <select
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                      value={besas.find(b => b.id === selectedBesa)?.status || 'active'}
+                      value={selectedBesaRecord?.status || 'active'}
                       onChange={(e) => updateBesaField(selectedBesa, 'status', e.target.value)}
                     >
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                     </select>
                   </div>
+                </div>
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Tour Availability</label>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Leave this off for all tours. Turn it on to make this BESA available only for selected tours.
+                      </p>
+                    </div>
+                    <label className="flex items-center text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedBesaHasTourRestrictions}
+                        onChange={(e) => {
+                          if (!selectedBesa) return;
+                          if (!e.target.checked) {
+                            updateBesaSupportedTours(selectedBesa, []);
+                            return;
+                          }
+                          if (selectedBesaSupportedTourIds.length === 0 && tours.length > 0) {
+                            updateBesaSupportedTours(selectedBesa, [tours[0].id]);
+                          }
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </label>
+                  </div>
+
+                  {selectedBesaHasTourRestrictions && (
+                    <div className="mt-4 space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {tours.length === 0 ? (
+                        <p className="text-sm text-gray-500">No tours found to assign.</p>
+                      ) : (
+                        tours.map((tour) => {
+                          const checked = selectedBesaSupportedTourIds.includes(tour.id);
+                          return (
+                            <label
+                              key={tour.id}
+                              className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  if (!selectedBesa) return;
+                                  const currentIds = selectedBesaRecord?.supportedTourIds || [];
+                                  const nextIds = e.target.checked
+                                    ? [...currentIds, tour.id]
+                                    : currentIds.filter((tourId) => tourId !== tour.id);
+                                  updateBesaSupportedTours(selectedBesa, nextIds);
+                                }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">{tour.title}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
               </form>
 

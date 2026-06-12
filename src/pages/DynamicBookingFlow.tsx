@@ -41,6 +41,13 @@ interface BookingData {
   largeTourDetails?: string;
 }
 
+const besaSupportsTour = (besa: Pick<BesaData, "supportedTourIds">, tourId?: string) => {
+  if (!tourId) return true;
+  const supportedTourIds = Array.isArray(besa.supportedTourIds) ? besa.supportedTourIds : [];
+  if (supportedTourIds.length === 0) return true;
+  return supportedTourIds.includes(tourId);
+};
+
 {/* Have calendar date show actual available dates (doesn't allow weekends, etc ) */ }
 {/* Hide tours not selected*/ }
 {/* Scheduling Rules: Show Date Ranges */ }
@@ -288,6 +295,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
             email: docData.email,
             status: docData.status,
             role: docData.role,
+            supportedTourIds: Array.isArray(docData.supportedTourIds) ? docData.supportedTourIds : [],
             officeHours: normalizeOfficeHours(docData.officeHours || {}),
           } as BesaData;
         });
@@ -712,6 +720,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     });
   };
   const getAutoAssignedBesas = (
+    tourId: string,
     bookingDate: string,
     bookingTime: string,
     durationMinutes = 0
@@ -722,6 +731,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     const availableBesas = besas.filter(
       (besa) =>
         besa.status === "active" &&
+        besaSupportsTour(besa, tourId) &&
         isBesaAvailable(besa, bookingDate, bookingTime, durationMinutes)
     );
 
@@ -931,6 +941,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       };
 
       const autoAssignedBesas = getAutoAssignedBesas(
+        updatedBookingData.tourId,
         updatedBookingData.date,
         updatedBookingData.startTime,
         durationMins
@@ -1464,6 +1475,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         return besas.some(
           (besa) =>
             besa.status === "active" &&
+            besaSupportsTour(besa, selected.tourId) &&
             isBesaAvailable(besa, date, time, durationMins)
         );
       };
