@@ -68,6 +68,257 @@ interface CustomCalendarProps {
   maxDate?: Date | null;
 }
 
+const startOfWeek = (date: Date) => {
+  const base = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  base.setDate(base.getDate() - base.getDay());
+  return base;
+};
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const formatDateString = (date: Date): string => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+const CustomCalendar: React.FC<CustomCalendarProps> = ({
+  selectedDate,
+  onDateSelect,
+  tourData,
+  isDateAvailable,
+  minDate,
+  maxDate,
+}) => {
+  const getInitialWeekStart = () => {
+    if (selectedDate) {
+      const [y, m, d] = selectedDate.split("-").map(Number);
+      if (y && m && d) return startOfWeek(new Date(y, m - 1, d));
+    }
+    if (minDate) {
+      return startOfWeek(new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()));
+    }
+    return startOfWeek(new Date());
+  };
+
+  const [currentWeekStart, setCurrentWeekStart] = useState(getInitialWeekStart);
+
+  const mobileDays = Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index));
+  const displayedDays = Array.from({ length: 14 }, (_, index) => addDays(currentWeekStart, index));
+  const periodEnd = displayedDays[13];
+  const mobilePeriodEnd = mobileDays[6];
+  const previousMobileWeekStart = addDays(currentWeekStart, -7);
+  const nextMobileWeekStart = addDays(currentWeekStart, 7);
+  const previousDesktopPeriodStart = addDays(currentWeekStart, -14);
+  const nextDesktopPeriodStart = addDays(currentWeekStart, 14);
+  const monthRangeLabel = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  const fullMonthLabel = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const isDateDisabled = (dateObj: Date): boolean => {
+    const dateStr = formatDateString(dateObj);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (dateObj < today) return true;
+
+    if (minDate) {
+      const min = new Date(minDate);
+      min.setHours(0, 0, 0, 0);
+      if (dateObj < min) return true;
+    }
+    if (maxDate) {
+      const max = new Date(maxDate);
+      max.setHours(23, 59, 59, 999);
+      if (dateObj > max) return true;
+    }
+
+    if (!tourData) return false;
+
+    const validation = isDateAvailable(dateStr, tourData);
+    return !validation.available;
+  };
+
+  const minWeekStart = minDate
+    ? startOfWeek(new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()))
+    : null;
+  const maxDateTime = maxDate
+    ? new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate(), 23, 59, 59, 999)
+    : null;
+  const canGoPreviousMobile = !minWeekStart || previousMobileWeekStart >= minWeekStart;
+  const canGoNextMobile = !maxDateTime || nextMobileWeekStart <= maxDateTime;
+  const canGoPreviousDesktop = !minWeekStart || previousDesktopPeriodStart >= minWeekStart;
+  const canGoNextDesktop = !maxDateTime || nextDesktopPeriodStart <= maxDateTime;
+
+  return (
+    <div className="border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
+      <div className="mb-6 flex justify-center">
+        <div className="flex flex-col items-center gap-1">
+          <h3 className="text-xl font-bold text-blue-600">
+            {fullMonthLabel.format(currentWeekStart)}
+          </h3>
+          <p className="hidden text-sm text-gray-500 sm:block">
+            {monthRangeLabel.format(currentWeekStart)} - {monthRangeLabel.format(periodEnd)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        Select from the available booking dates.
+      </div>
+
+      <div className="sm:hidden">
+        <div className="mb-3 flex items-center justify-between">
+          <button
+            onClick={() => canGoPreviousMobile && setCurrentWeekStart(previousMobileWeekStart)}
+            className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
+            type="button"
+            disabled={!canGoPreviousMobile}
+            aria-label="Previous week"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <span className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+            {monthRangeLabel.format(currentWeekStart)} - {monthRangeLabel.format(mobilePeriodEnd)}
+          </span>
+          <button
+            onClick={() => canGoNextMobile && setCurrentWeekStart(nextMobileWeekStart)}
+            className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
+            type="button"
+            disabled={!canGoNextMobile}
+            aria-label="Next week"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory">
+          {mobileDays.map((dateObj) => {
+            const dateStr = formatDateString(dateObj);
+            const isSelected = selectedDate === dateStr;
+            const isDisabled = isDateDisabled(dateObj);
+            const weekdayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+            const monthLabel = dateObj.toLocaleDateString("en-US", { month: "short" });
+            const dayNumber = dateObj.getDate();
+
+            return (
+              <button
+                key={`mobile-${dateStr}`}
+                type="button"
+                onClick={() => !isDisabled && onDateSelect(dateStr)}
+                disabled={isDisabled}
+                className={`
+                  min-h-[88px] min-w-[72px] snap-start rounded-xl border px-2 py-2 text-center transition-all
+                  ${isSelected ? "bg-blue-500 text-white shadow-lg ring-2 ring-blue-500 border-blue-500" : ""}
+                  ${!isSelected && !isDisabled ? "bg-blue-50 text-gray-800 border-blue-200" : ""}
+                  ${isDisabled ? "text-gray-300 cursor-not-allowed bg-gray-50 border-gray-200 opacity-60" : "cursor-pointer"}
+                `}
+              >
+                <div className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${isSelected ? "text-blue-100" : "text-blue-700"}`}>
+                  {weekdayLabel}
+                </div>
+                <div className="mt-2 text-2xl font-bold leading-none">
+                  {dayNumber}
+                </div>
+                <div className={`mt-1 text-xs ${isSelected ? "text-blue-100" : "text-gray-500"}`}>
+                  {monthLabel}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="hidden items-center gap-3 sm:flex">
+        <button
+          onClick={() => canGoPreviousDesktop && setCurrentWeekStart(previousDesktopPeriodStart)}
+          className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
+          type="button"
+          disabled={!canGoPreviousDesktop}
+          aria-label="Previous week"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+
+        <div className="grid flex-1 grid-cols-7 gap-2 overflow-x-auto pb-2">
+          {displayedDays.map((dateObj) => {
+            const dateStr = formatDateString(dateObj);
+            const isSelected = selectedDate === dateStr;
+            const isDisabled = isDateDisabled(dateObj);
+            const weekdayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+            const monthLabel = dateObj.toLocaleDateString("en-US", { month: "short" });
+            const dayNumber = dateObj.getDate();
+
+            return (
+              <button
+                key={dateStr}
+                type="button"
+                onClick={() => !isDisabled && onDateSelect(dateStr)}
+                disabled={isDisabled}
+                className={`
+                  min-h-[74px] min-w-[74px] rounded-xl border px-2.5 py-2 text-left transition-all
+                  ${isSelected ? "bg-blue-500 text-white shadow-lg ring-2 ring-blue-500 border-blue-500" : ""}
+                  ${!isSelected && !isDisabled ? "bg-blue-50 hover:bg-blue-100 text-gray-800 border-blue-200 hover:border-blue-400" : ""}
+                  ${isDisabled ? "text-gray-300 cursor-not-allowed bg-gray-50 border-gray-200 opacity-60" : "cursor-pointer"}
+                `}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className={`text-xs font-semibold uppercase tracking-[0.2em] ${isSelected ? "text-blue-100" : "text-blue-700"}`}>
+                      {weekdayLabel}
+                    </div>
+                    <div className="mt-1 text-xl font-bold leading-none">
+                      {dayNumber}
+                    </div>
+                    <div className={`mt-1 text-xs ${isSelected ? "text-blue-100" : "text-gray-500"}`}>
+                      {monthLabel}
+                    </div>
+                  </div>
+                  {!isDisabled && (
+                    <span className={`rounded-full px-1 py-0.5 text-[9px] font-semibold leading-none ${isSelected ? "bg-white/20 text-white" : "bg-white text-blue-700"}`}>
+                      Open
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => canGoNextDesktop && setCurrentWeekStart(nextDesktopPeriodStart)}
+          className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
+          type="button"
+          disabled={!canGoNextDesktop}
+          aria-label="Next week"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+
+      {tourData && (
+        <div className="mt-6 flex items-center justify-center gap-4 border-t-2 border-blue-200 pt-4 text-sm sm:gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-lg bg-blue-500 shadow-md ring-2 ring-blue-500"></div>
+            <span className="font-medium text-blue-800">Selected</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-lg bg-gray-50 border-2 border-gray-300"></div>
+            <span className="font-medium text-gray-600">Unavailable</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ---------- Page (parent) ----------
 function parseLocalDateTime(dateStr: string, timeLabel: string): Date {
   // Example timeLabel: "3:05 PM"
@@ -346,287 +597,6 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       setErrors((prev) => ({ ...prev, [field as string]: "" }));
     }
     console.log("Tour selected")
-  };
-
-  // Calendar Display for Section 1
-  const CustomCalendar: React.FC<CustomCalendarProps> = ({ selectedDate, onDateSelect, tourData, isDateAvailable, minDate, maxDate }) => {
-    const startOfWeek = (date: Date) => {
-      const base = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      base.setDate(base.getDate() - base.getDay());
-      return base;
-    };
-
-    const addDays = (date: Date, days: number) => {
-      const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      next.setDate(next.getDate() + days);
-      return next;
-    };
-
-    const formatDateString = (date: Date): string => {
-      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    };
-
-    const getInitialWeekStart = () => {
-      if (selectedDate) {
-        const [y, m, d] = selectedDate.split("-").map(Number);
-        if (y && m && d) return startOfWeek(new Date(y, m - 1, d));
-      }
-      if (minDate) {
-        return startOfWeek(new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()));
-      }
-      return startOfWeek(new Date());
-    };
-
-    const [currentWeekStart, setCurrentWeekStart] = useState(getInitialWeekStart);
-
-    useEffect(() => {
-      if (!selectedDate) return;
-      const [y, m, d] = selectedDate.split("-").map(Number);
-      if (!y || !m || !d) return;
-      const targetWeek = startOfWeek(new Date(y, m - 1, d));
-      if (targetWeek.getTime() !== currentWeekStart.getTime()) {
-        setCurrentWeekStart(targetWeek);
-      }
-    }, [selectedDate, currentWeekStart]);
-
-    const mobileDays = Array.from({ length: 7 }, (_, index) => addDays(currentWeekStart, index));
-    const displayedDays = Array.from({ length: 14 }, (_, index) => addDays(currentWeekStart, index));
-    const periodEnd = displayedDays[13];
-    const mobilePeriodEnd = mobileDays[6];
-    const previousMobileWeekStart = addDays(currentWeekStart, -7);
-    const nextMobileWeekStart = addDays(currentWeekStart, 7);
-    const previousDesktopPeriodStart = addDays(currentWeekStart, -14);
-    const nextDesktopPeriodStart = addDays(currentWeekStart, 14);
-    const monthRangeLabel = new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    const fullMonthLabel = new Intl.DateTimeFormat("en-US", {
-      month: "long",
-      year: "numeric",
-    });
-
-    const isDateDisabled = (dateObj: Date): boolean => {
-      const dateStr = formatDateString(dateObj);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // Disable past dates
-      if (dateObj < today) return true;
-
-      // Respect tour-level min/max range if provided
-      if (minDate) {
-        const min = new Date(minDate);
-        min.setHours(0, 0, 0, 0);
-        if (dateObj < min) return true;
-      }
-      if (maxDate) {
-        const max = new Date(maxDate);
-        max.setHours(23, 59, 59, 999);
-        if (dateObj > max) return true;
-      }
-
-      // If no tour selected, enable all future dates
-      if (!tourData) return false;
-
-      // Check availability using the provided function
-      const validation = isDateAvailable(dateStr, tourData);
-      return !validation.available;
-    };
-
-    const minWeekStart = minDate
-      ? startOfWeek(new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()))
-      : null;
-    const maxDateTime = maxDate
-      ? new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate(), 23, 59, 59, 999)
-      : null;
-    const canGoPreviousMobile = !minWeekStart || previousMobileWeekStart >= minWeekStart;
-    const canGoNextMobile = !maxDateTime || nextMobileWeekStart <= maxDateTime;
-    const canGoPreviousDesktop = !minWeekStart || previousDesktopPeriodStart >= minWeekStart;
-    const canGoNextDesktop = !maxDateTime || nextDesktopPeriodStart <= maxDateTime;
-
-    return (
-      <div className="border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
-        {/* Calendar Header */}
-        <div className="mb-6 flex justify-center">
-          <div className="flex flex-col items-center gap-1">
-            <h3 className="text-xl font-bold text-blue-600">
-              {fullMonthLabel.format(currentWeekStart)}
-            </h3>
-            <p className="hidden text-sm text-gray-500 sm:block">
-              {monthRangeLabel.format(currentWeekStart)} - {monthRangeLabel.format(periodEnd)}
-            </p>
-          </div>
-        </div>
-
-        <div className="mb-4 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
-          Select from the available booking dates.
-        </div>
-
-        {/* Mobile calendar */}
-        <div className="sm:hidden">
-          <div className="mb-3 flex items-center justify-between">
-            <button
-              onClick={() => canGoPreviousMobile && setCurrentWeekStart(previousMobileWeekStart)}
-              className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
-              type="button"
-              disabled={!canGoPreviousMobile}
-              aria-label="Previous week"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <span className="text-center text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
-              {monthRangeLabel.format(currentWeekStart)} - {monthRangeLabel.format(mobilePeriodEnd)}
-            </span>
-            <button
-              onClick={() => canGoNextMobile && setCurrentWeekStart(nextMobileWeekStart)}
-              className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
-              type="button"
-              disabled={!canGoNextMobile}
-              aria-label="Next week"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory">
-            {mobileDays.map((dateObj) => {
-              const dateStr = formatDateString(dateObj);
-              const isSelected = selectedDate === dateStr;
-              const isDisabled = isDateDisabled(dateObj);
-              const weekdayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short" });
-              const monthLabel = dateObj.toLocaleDateString("en-US", { month: "short" });
-              const dayNumber = dateObj.getDate();
-
-              return (
-                <button
-                  key={`mobile-${dateStr}`}
-                  type="button"
-                  onClick={() => !isDisabled && onDateSelect(dateStr)}
-                  disabled={isDisabled}
-                  className={`
-                  min-h-[88px] min-w-[72px] snap-start rounded-xl border px-2 py-2 text-center transition-all
-                  ${isSelected
-                      ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500 border-blue-500'
-                      : ''
-                    }
-                  ${!isSelected && !isDisabled
-                      ? 'bg-blue-50 text-gray-800 border-blue-200'
-                      : ''
-                    }
-                  ${isDisabled
-                      ? 'text-gray-300 cursor-not-allowed bg-gray-50 border-gray-200 opacity-60'
-                      : 'cursor-pointer'
-                    }
-                `}
-                >
-                  <div className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${isSelected ? 'text-blue-100' : 'text-blue-700'}`}>
-                    {weekdayLabel}
-                  </div>
-                  <div className="mt-2 text-2xl font-bold leading-none">
-                    {dayNumber}
-                  </div>
-                  <div className={`mt-1 text-xs ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
-                    {monthLabel}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Tablet/Desktop calendar */}
-        <div className="hidden items-center gap-3 sm:flex">
-          <button
-            onClick={() => canGoPreviousDesktop && setCurrentWeekStart(previousDesktopPeriodStart)}
-            className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
-            type="button"
-            disabled={!canGoPreviousDesktop}
-            aria-label="Previous week"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-
-          <div className="grid flex-1 grid-cols-7 gap-2 overflow-x-auto pb-2">
-            {displayedDays.map((dateObj) => {
-              const dateStr = formatDateString(dateObj);
-              const isSelected = selectedDate === dateStr;
-              const isDisabled = isDateDisabled(dateObj);
-              const weekdayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short" });
-              const monthLabel = dateObj.toLocaleDateString("en-US", { month: "short" });
-              const dayNumber = dateObj.getDate();
-
-              return (
-                <button
-                  key={dateStr}
-                  type="button"
-                  onClick={() => !isDisabled && onDateSelect(dateStr)}
-                  disabled={isDisabled}
-                  className={`
-                  min-h-[74px] min-w-[74px] rounded-xl border px-2.5 py-2 text-left transition-all
-                  ${isSelected
-                      ? 'bg-blue-500 text-white shadow-lg ring-2 ring-blue-500 border-blue-500'
-                      : ''
-                    }
-                  ${!isSelected && !isDisabled
-                      ? 'bg-blue-50 hover:bg-blue-100 text-gray-800 border-blue-200 hover:border-blue-400'
-                      : ''
-                    }
-                  ${isDisabled
-                      ? 'text-gray-300 cursor-not-allowed bg-gray-50 border-gray-200 opacity-60'
-                      : 'cursor-pointer'
-                    }
-                `}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className={`text-xs font-semibold uppercase tracking-[0.2em] ${isSelected ? 'text-blue-100' : 'text-blue-700'}`}>
-                        {weekdayLabel}
-                      </div>
-                      <div className="mt-1 text-xl font-bold leading-none">
-                        {dayNumber}
-                      </div>
-                    <div className={`mt-1 text-xs ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
-                      {monthLabel}
-                    </div>
-                  </div>
-                  {!isDisabled && (
-                      <span className={`rounded-full px-1 py-0.5 text-[9px] font-semibold leading-none ${isSelected ? 'bg-white/20 text-white' : 'bg-white text-blue-700'}`}>
-                        Open
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={() => canGoNextDesktop && setCurrentWeekStart(nextDesktopPeriodStart)}
-            className="shrink-0 rounded-full border border-blue-200 p-2 text-blue-600 transition-all hover:bg-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-blue-600"
-            type="button"
-            disabled={!canGoNextDesktop}
-            aria-label="Next week"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Legend */}
-        {tourData && (
-          <div className="mt-6 flex items-center justify-center gap-4 border-t-2 border-blue-200 pt-4 text-sm sm:gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-lg bg-blue-500 shadow-md ring-2 ring-blue-500"></div>
-              <span className="font-medium text-blue-800">Selected</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-lg bg-gray-50 border-2 border-gray-300"></div>
-              <span className="font-medium text-gray-600">Unavailable</span>
-            </div>
-          </div>
-        )}
-      </div>
-    );
   };
 
   // Preselect the tour from param once tours are loaded
@@ -1297,12 +1267,25 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
           <CustomCalendar
             selectedDate={bookingData.date}
             onDateSelect={(date) => {
-              updateBookingData("date", date);
+              const nextDate = bookingData.date === date ? "" : date;
+
+              setBookingData((prev) => ({
+                ...prev,
+                date: nextDate,
+                startTime: "",
+                time: "",
+                endTime: "",
+              }));
+
+              if (!nextDate) {
+                setErrors((prev) => ({ ...prev, date: "", time: "" }));
+                return;
+              }
 
               // Validate immediately if a tour is selected
               if (selectedTourData) {
                 // Check date range first
-                if (!isDateInRange(date)) {
+                if (!isDateInRange(nextDate)) {
                   setErrors(prev => ({
                     ...prev,
                     date: `Please select a date between ${minDate?.toLocaleDateString()} and ${maxDate?.toLocaleDateString()}`
@@ -1310,11 +1293,11 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
                   return;
                 }
 
-                const validation = isDateAvailable(date, selectedTourData);
+                const validation = isDateAvailable(nextDate, selectedTourData);
                 if (!validation.available) {
                   setErrors(prev => ({ ...prev, date: validation.reason || "Unable to book on this day. Please select an available date." }));
                 } else {
-                  setErrors(prev => ({ ...prev, date: "" }));
+                  setErrors(prev => ({ ...prev, date: "", time: "" }));
                 }
               }
             }}
