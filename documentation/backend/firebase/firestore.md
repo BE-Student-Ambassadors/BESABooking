@@ -40,6 +40,7 @@ Core collections:
 - **Doc ID**: BESA id
 - **Fields** (see `BesaData` in `src/types/global.d.ts` and `BesaType` in `BESAManagements.tsx`):
   - `name`, `email`, `status`, `role`
+  - `supportedTourIds?`: array of `Tours` doc ids; empty or missing means the BESA can cover all tours
   - `officeHours`: map of day → `{ available: bool, timeSlots: [{ id, start, end }] }`
   - Legacy shapes may store `{ start, end }` per day; UI normalizes on read.
 

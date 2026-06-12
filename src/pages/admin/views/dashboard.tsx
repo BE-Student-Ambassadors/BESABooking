@@ -4,6 +4,13 @@ import { Calendar, Users, Trash2, X } from 'lucide-react';
 import { db } from '../../../../src/firebase.ts';
 import { collection, getDocs, updateDoc, doc, deleteDoc } from "firebase/firestore";
 
+const besaSupportsTour = (besa: Pick<BesaData, 'supportedTourIds'>, tourId?: string) => {
+  if (!tourId) return true;
+  const supportedTourIds = Array.isArray(besa.supportedTourIds) ? besa.supportedTourIds : [];
+  if (supportedTourIds.length === 0) return true;
+  return supportedTourIds.includes(tourId);
+};
+
 export default function DashboardView() {
   const [currentRole] = useState<UserRole>("public");
   const [bookings, setBookings] = useState<BookingData[]>([]);
@@ -89,6 +96,7 @@ export default function DashboardView() {
             email: docData.email,
             status: docData.status,
             role: docData.role,
+            supportedTourIds: Array.isArray(docData.supportedTourIds) ? docData.supportedTourIds : [],
             officeHours: convertedOfficeHours
           } as BesaData;
         });
@@ -260,7 +268,9 @@ export default function DashboardView() {
   // Get available BESAs for a specific booking
   const getAvailableBesas = (booking: BookingData) => {
     return besaList.filter(besa => 
-      besa.status === 'active' && isBesaAvailable(besa, booking.date, booking.startTime)
+      besa.status === 'active' &&
+      besaSupportsTour(besa, booking.tourId) &&
+      isBesaAvailable(besa, booking.date, booking.startTime)
     );
   };
 

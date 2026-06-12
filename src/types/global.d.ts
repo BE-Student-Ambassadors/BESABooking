@@ -122,6 +122,7 @@ declare global {
         email: string;
         status: string;
         role: string;
+        supportedTourIds?: string[];
         officeHours: {
             [day: string]: DayHours;
         };
@@ -163,6 +164,7 @@ declare global {
       email: string;
       status: string;
       role: string;
+      supportedTourIds?: string[];
       officeHours: {
         monday: OfficeHours;
         tuesday: OfficeHours;
