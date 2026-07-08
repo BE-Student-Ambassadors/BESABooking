@@ -383,13 +383,10 @@ function BookingPage() {
             dateSpecificDays: data.dateSpecificDays ?? [], // ← Add this
             frequency: data.frequency ?? 1,
             frequencyUnit: data.frequencyUnit ?? "hours",
-            registrationLimit: data.registrationLimit ?? 1,
             minNotice: data.minNotice ?? 0,
             minNoticeUnit: data.minNoticeUnit ?? "hours",
             maxNotice: data.maxNotice ?? 1,
             maxNoticeUnit: data.maxNoticeUnit ?? "days",
-            bufferTime: data.bufferTime ?? 0,
-            bufferUnit: data.bufferUnit ?? "minutes",
             cancellationPolicy: data.cancellationPolicy ?? "",
             reschedulingPolicy: data.reschedulingPolicy ?? "",
             intakeForm: data.intakeForm ?? {
@@ -643,6 +640,56 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
   const getBookingTime = (booking: BookingRecord): string | undefined =>
     booking.startTime ?? booking.time;
+
+  const getMinutesFromLabel = (label?: string): number | null => {
+    if (!label) return null;
+    const t24 = parseTime12Hour(label) || label;
+    if (!t24.includes(':')) return null;
+    return toMinutes(t24);
+  };
+
+  const getBlockedSlotRules = (dateStr: string, selectedTour?: Tour) => {
+    const blockedTimes = new Set<number>();
+    const blockedRanges: Array<{ start: number; end: number }> = [];
+
+    const addBlockedRules = (override?: Tour['dateSpecificBlockDays'][number]) => {
+      (override?.blockedTimes || []).forEach((time) => {
+        if (!time) return;
+        blockedTimes.add(toMinutes(time));
+      });
+
+      (override?.blockedRanges || []).forEach((range) => {
+        if (!range.start || !range.end) return;
+        const start = toMinutes(range.start);
+        const end = toMinutes(range.end);
+        if (start < 0 || end < 0 || start >= end) return;
+        blockedRanges.push({ start, end });
+      });
+    };
+
+    if (selectedTour) {
+      addBlockedRules(findDateOverride(dateStr, selectedTour));
+    }
+
+    tours.forEach((tour) => {
+      (tour.dateSpecificBlockDays || []).forEach((override) => {
+        if (override.appliesToAllTours && isDateWithinOverride(dateStr, override.startDate, override.endDate)) {
+          addBlockedRules(override);
+        }
+      });
+    });
+
+    return { blockedTimes, blockedRanges };
+  };
+
+  const isSlotBlocked = (
+    slotStartMinutes: number,
+    slotEndMinutes: number,
+    rules: ReturnType<typeof getBlockedSlotRules>
+  ) => {
+    if (rules.blockedTimes.has(slotStartMinutes)) return true;
+    return rules.blockedRanges.some((range) => slotStartMinutes < range.end && range.start < slotEndMinutes);
+  };
 
   const parseTime12Hour = (time12: string) => {
     if (!time12) return "";
@@ -1138,7 +1185,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
       let allTimeSlots: string[] = [];
 
-      if (dateSpecific && dateSpecific.slots) {
+      if (dateSpecific?.slots?.length) {
         allTimeSlots = dateSpecific.slots.flatMap((slot) =>
           generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
         );
@@ -1156,8 +1203,13 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         }
       }
 
+      const blockedSlotRules = getBlockedSlotRules(dateStr, selectedTourData);
+
       // Check if any slots meet the 24-hour requirement and aren't full
       return allTimeSlots.some(time => {
+        const slotMinutes = getMinutesFromLabel(time);
+        if (slotMinutes !== null && isSlotBlocked(slotMinutes, slotMinutes + durationMins, blockedSlotRules)) return false;
+
         const [timePart, period] = time.split(' ');
         const [hours, minutes] = timePart.split(':').map(Number);
 
@@ -1192,7 +1244,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     };
 
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
 
         <div>
           <div className="grid gap-6">
@@ -1389,13 +1441,6 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       return bookingCount >= maxBookings;
     };
 
-    const getMinutesFromLabel = (label?: string): number | null => {
-      if (!label) return null;
-      const t24 = parseTime12Hour(label) || label; // allow already-24h strings
-      if (!t24.includes(':')) return null;
-      return toMinutes(t24);
-    };
-
     // Block slots if another tour type overlaps the selected slot window
     const hasCrossTourConflict = (date: string, time: string): boolean => {
       const candidateStart = getMinutesFromLabel(time);
@@ -1431,7 +1476,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
       let allTimeSlots: string[] = [];
 
-      if (dateSpecific && dateSpecific.slots) {
+      if (dateSpecific?.slots?.length) {
         console.log("Using date-specific slots:", dateSpecific.slots);
         allTimeSlots = dateSpecific.slots.flatMap((slot) =>
           generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
@@ -1463,7 +1508,14 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         );
       };
 
+      const blockedSlotRules = getBlockedSlotRules(date, selected);
+
       const availableSlots = allTimeSlots.filter(time =>
+        !isSlotBlocked(
+          getMinutesFromLabel(time) ?? -1,
+          (getMinutesFromLabel(time) ?? -1) + durationMins,
+          blockedSlotRules
+        ) &&
         hasCoverage(time) &&
         !isTimeSlotFull(time) &&
         isTimeSlotValid(time) &&

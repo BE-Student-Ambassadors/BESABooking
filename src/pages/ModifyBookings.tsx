@@ -269,6 +269,22 @@ const ModifyBookingsPage: React.FC = () => {
 
       if (!slotWindows || slotWindows.length === 0) return false;
 
+      const blockedMinutes = new Set<number>();
+      (override?.blockedTimes || []).forEach((time) => {
+        const parsed = toMinutes(time);
+        if (parsed >= 0) blockedMinutes.add(parsed);
+      });
+      const blockedRanges: Array<{ start: number; end: number }> = [];
+      (override?.blockedRanges || []).forEach((range) => {
+        const start = toMinutes(range.start);
+        const end = toMinutes(range.end);
+        if (start >= 0 && end >= 0 && start < end) {
+          blockedRanges.push({ start, end });
+        }
+      });
+      if (blockedMinutes.has(minutes)) return false;
+      if (blockedRanges.some((range) => minutes < range.end && range.start < minutes + durationMinutes)) return false;
+
       // Require an exact generated slot match (prevents arbitrary times inside a window)
       return slotWindows.some((window) => {
         const startM = toMinutes(window.start);
