@@ -40,6 +40,8 @@ declare global {
             startDate: string;
             endDate?: string;
             slots: { start: string; end: string }[];
+            blockedTimes?: string[];
+            blockedRanges?: { start: string; end: string }[];
             unavailable: boolean;
             appliesToAllTours?: boolean;
         }>;
@@ -58,13 +60,10 @@ declare global {
         applyToAllTours?: boolean; // Whether recurrence applies to all dates
 
         // Scheduling Rules
-        registrationLimit: number; // Max Bookings allowed
         minNotice: number; // Minimum time required
         minNoticeUnit: 'hours' | 'days' | 'weeks'; // Unit for minNotice
         maxNotice: number; // Maximum time in advance (3 months, 6 months, 1 year)
         maxNoticeUnit: 'days' | 'weeks' | 'months'; // Unit for maxNotice
-        bufferTime: number; // Buffer time between bookings (slugworks 20min)
-        bufferUnit: 'minutes' | 'hours' | 'hour'; // Unit for bufferTime
         cancellationPolicy: string; // Cancellation policy details
         reschedulingPolicy: string; // Rescheduling policy details
 

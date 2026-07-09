@@ -95,13 +95,10 @@ function App() {
             dateSpecificDays: data.dateSpecificDays ?? [], 
             frequency: data.frequency ?? 1,
             frequencyUnit: data.frequencyUnit ?? "hours",
-            registrationLimit: data.registrationLimit ?? 1,
             minNotice: data.minNotice ?? 0,
             minNoticeUnit: data.minNoticeUnit ?? "hours",
             maxNotice: data.maxNotice ?? 1,
             maxNoticeUnit: data.maxNoticeUnit ?? "days",
-            bufferTime: data.bufferTime ?? 0,
-            bufferUnit: data.bufferUnit ?? "minutes",
             cancellationPolicy: data.cancellationPolicy ?? "",
             reschedulingPolicy: data.reschedulingPolicy ?? "",
             intakeForm: data.intakeForm ?? {

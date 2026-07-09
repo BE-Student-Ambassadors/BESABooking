@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, Dispatch, SetStateAction } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, Bell, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
 
@@ -29,13 +29,10 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     dateSpecificDays: [],
     frequency: 60,
     frequencyUnit: 'minutes',
-    registrationLimit: 10,
     minNotice: 24,
     minNoticeUnit: 'hours',
     maxNotice: 30,
     maxNoticeUnit: 'days',
-    bufferTime: 15,
-    bufferUnit: 'minutes',
     cancellationPolicy: '',
     reschedulingPolicy: '',
     intakeForm: {
@@ -61,9 +58,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     { number: 2, title: 'Location', icon: MapPin },
     { number: 3, title: 'Availability', icon: Calendar },
     { number: 4, title: 'Scheduling Rules', icon: Settings },
-    { number: 5, title: 'Intake Form', icon: Users },
-    { number: 6, title: 'Notifications', icon: Bell },
-    { number: 7, title: 'Review', icon: CheckCircle }
+    { number: 5, title: 'Review', icon: CheckCircle }
   ];
 
   const updateTour = (updates: Partial<Tour>) => {
@@ -91,52 +86,23 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     });
   };
 
-  const addCustomQuestion = () => {
-    const newQuestion = {
-      question: '',
-      type: 'text' as const,
-      required: false,
-      options: []
-    };
-    updateTour({
-      intakeForm: {
-        ...tour.intakeForm,
-        customQuestions: [...tour.intakeForm.customQuestions, newQuestion]
-      }
-    });
-  };
-
-  const removeCustomQuestion = (index: number) => {
-    const newQuestions = tour.intakeForm.customQuestions.filter((_, i) => i !== index);
-    updateTour({
-      intakeForm: {
-        ...tour.intakeForm,
-        customQuestions: newQuestions
-      }
-    });
-  };
-
-  const addReminderEmail = () => {
-    updateTour({
-      reminderEmails: [...tour.reminderEmails, { timing: 24, unit: 'hours' }]
-    });
-  };
-
-  const removeReminderEmail = (index: number) => {
-    updateTour({
-      reminderEmails: tour.reminderEmails.filter((_, i) => i !== index)
-    });
-  };
-
   const canProceed = () => {
     switch (currentStep) {
       case 1:
         return tour.title.trim() && tour.description.trim() && tour.duration > 0;
       case 2:
-        return tour.location.trim() || tour.zoomLink.trim() || tour.autoGenerateZoom;
+        return tour.location.trim() || tour.zoomLink.trim();
       default:
         return true;
     }
+  };
+
+  const formatTime12Hour = (time24: string) => {
+    if (!time24 || !time24.includes(':')) return time24;
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = ((hours + 11) % 12) + 1;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
   const renderStepContent = () => {
@@ -243,44 +209,17 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
           </div>
 
           <div className="border-t pt-4 2xl:pt-6">
-            <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 2xl:gap-0 mb-4">
-              <label className="block text-sm font-medium text-gray-700">
-                <Video className="inline h-4 w-4 mr-1" />
-                Virtual Option
-              </label>
-              <label className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={tour.autoGenerateZoom}
-                  onChange={(e) => updateTour({ 
-                    autoGenerateZoom: e.target.checked,
-                    zoomLink: e.target.checked ? '' : tour.zoomLink
-                  })}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                {/* Auto generate requieres 'build app' feature in BESA account */}
-                <span className="text-xs 2xl:text-sm text-gray-600">Auto-generate Zoom link</span>
-              </label>
-            </div>
-
-            {!tour.autoGenerateZoom && (
-              <input
-                type="url"
-                className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
-                placeholder="https://zoom.us/j/..."
-                value={tour.zoomLink}
-                onChange={(e) => updateTour({ zoomLink: e.target.value })}
-              />
-            )}
-
-            {tour.autoGenerateZoom && (
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 2xl:p-4">
-                <p className="text-xs 2xl:text-sm text-gray-600">
-                  <Globe className="inline h-4 w-4 mr-1" />
-                  A Zoom link will be automatically generated when the tour is published
-                </p>
-              </div>
-            )}
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Video className="inline h-4 w-4 mr-1" />
+              Virtual Meeting Link
+            </label>
+            <input
+              type="url"
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+              placeholder="https://zoom.us/j/..."
+              value={tour.zoomLink}
+              onChange={(e) => updateTour({ zoomLink: e.target.value, autoGenerateZoom: false })}
+            />
           </div>
         </div>
       );
@@ -408,7 +347,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
   <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 2xl:gap-0 mb-3 2xl:mb-4">
     <div>
       <h3 className="text-base 2xl:text-lg font-medium text-gray-900">Holidays & Special Events</h3>
-      <p className="text-xs 2xl:text-sm text-gray-500 mt-1">Block off specific dates</p>
+      <p className="text-xs 2xl:text-sm text-gray-500 mt-1">These blocked off dates apply to this tour only.</p>
     </div>
     <button
       type="button"
@@ -525,7 +464,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             </div>
 
             {dateOverride.slots.length === 0 && (
-              <p className="text-gray-500 text-xs mb-2">No custom slots (will use weekly hours)</p>
+              <p className="text-gray-500 text-xs mb-2">No custom slots.</p>
             )}
 
             <div className="space-y-2">
@@ -587,18 +526,6 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     case 4:
       return (
         <div className="space-y-4 2xl:space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Registration Limit</label>
-            <input
-              type="number"
-              min="1"
-              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
-              placeholder="Maximum people per session"
-              value={tour.registrationLimit}
-              onChange={(e) => updateTour({ registrationLimit: parseInt(e.target.value) || 1 })}
-            />
-          </div>
-
           <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 2xl:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Notice</label>
@@ -646,27 +573,6 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Buffer Time Between Tours</label>
-            <div className="flex space-x-2">
-              <input
-                type="number"
-                min="0"
-                className="w-16 2xl:w-24 px-2 2xl:px-3 py-2 2xl:py-3 border border-gray-300 rounded-lg text-sm 2xl:text-base"
-                value={tour.bufferTime}
-                onChange={(e) => updateTour({ bufferTime: parseInt(e.target.value) || 0 })}
-              />
-              <select
-                className="flex-1 px-2 2xl:px-3 py-2 2xl:py-3 border border-gray-300 rounded-lg text-xs 2xl:text-sm"
-                value={tour.bufferUnit}
-                onChange={(e) => updateTour({ bufferUnit: e.target.value as 'minutes' | 'hours' })}
-              >
-                <option value="minutes">Minutes</option>
-                <option value="hours">Hours</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Cancellation Policy</label>
             <textarea
               rows={3}
@@ -691,243 +597,6 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
       );
 
     case 5:
-      const isLargeInPersonTour = tour.title.toLowerCase().includes('large') && tour.title.toLowerCase().includes('person');
-      return (
-        <div className="space-y-4 2xl:space-y-6">
-          <div>
-            <h3 className="text-base 2xl:text-lg font-medium text-gray-900 mb-3 2xl:mb-4">Required Information</h3>
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 2xl:gap-4">
-              {Object.entries({
-                firstName: 'First Name',
-                lastName: 'Last Name',
-                email: 'Email Address',
-                phone: 'Phone Number',
-                attendeeCount: 'Number of Attendees',
-                majorsInterested: 'Majors of Interest'
-              }).map(([key, label]) => (
-                <label key={key} className="flex items-center space-x-2 2xl:space-x-3 p-2 2xl:p-0">
-                  <input
-                    type="checkbox"
-                    checked={tour.intakeForm[key as keyof typeof tour.intakeForm] as boolean}
-                    onChange={(e) => updateTour({
-                      intakeForm: {
-                        ...tour.intakeForm,
-                        [key]: e.target.checked
-                      }
-                    })}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                  />
-                  <span className="text-xs 2xl:text-sm text-gray-700">{label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {isLargeInPersonTour && (
-            <div className="border-t pt-4 2xl:pt-6">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <h4 className="text-sm 2xl:text-base font-medium text-gray-900">Large In-Person Tour Details</h4>
-                  <p className="text-xs 2xl:text-sm text-gray-600">
-                    Add an open-ended question so requesters can share specifics about their large group.
-                  </p>
-                </div>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    checked={tour.intakeForm.largeTourDetailsEnabled ?? false}
-                    onChange={(e) =>
-                      updateTour({
-                        intakeForm: {
-                          ...tour.intakeForm,
-                          largeTourDetailsEnabled: e.target.checked
-                        }
-                      })
-                    }
-                  />
-                  <span className="text-xs 2xl:text-sm text-gray-700">Enable question</span>
-                </label>
-              </div>
-
-              {tour.intakeForm.largeTourDetailsEnabled && (
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Prompt shown on the intake form
-                  </label>
-                  <textarea
-                    className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
-                    rows={2}
-                    value={tour.intakeForm.largeTourDetailsLabel || ''}
-                    onChange={(e) =>
-                      updateTour({
-                        intakeForm: {
-                          ...tour.intakeForm,
-                          largeTourDetailsLabel: e.target.value
-                        }
-                      })
-                    }
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="border-t pt-4 2xl:pt-6">
-            <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 2xl:gap-0 mb-3 2xl:mb-4">
-              <h3 className="text-base 2xl:text-lg font-medium text-gray-900">Custom Questions</h3>
-              <button
-                type="button"
-                onClick={addCustomQuestion}
-                className="text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center space-x-1 self-start"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="text-sm">Add Question</span>
-              </button>
-            </div>
-
-            <div className="space-y-3 2xl:space-y-4">
-              {tour.intakeForm.customQuestions.map((question, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-3 2xl:p-4">
-                  <div className="flex items-start justify-between mb-3 gap-2">
-                    <div className="flex-1 min-w-0">
-                      <input
-                        type="text"
-                        className="w-full px-2 2xl:px-3 py-1 2xl:py-2 border border-gray-300 rounded-lg text-sm 2xl:text-base"
-                        placeholder="Enter your question..."
-                        value={question.question}
-                        onChange={(e) => {
-                          const newQuestions = [...tour.intakeForm.customQuestions];
-                          newQuestions[index] = { ...question, question: e.target.value };
-                          updateTour({
-                            intakeForm: { ...tour.intakeForm, customQuestions: newQuestions }
-                          });
-                        }}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeCustomQuestion(index)}
-                      className="text-red-600 hover:bg-red-50 p-1 rounded-lg flex-shrink-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 2xl:grid-cols-2 gap-3 2xl:gap-4">
-                    <select
-                      className="px-2 2xl:px-3 py-1 2xl:py-2 border border-gray-300 rounded-lg text-xs 2xl:text-sm"
-                      value={question.type}
-                      onChange={(e) => {
-                        const newQuestions = [...tour.intakeForm.customQuestions];
-                        newQuestions[index] = { ...question, type: e.target.value as any };
-                        updateTour({
-                          intakeForm: { ...tour.intakeForm, customQuestions: newQuestions }
-                        });
-                      }}
-                    >
-                      <option value="text">Short Text</option>
-                      <option value="textarea">Long Text</option>
-                      <option value="select">Dropdown</option>
-                      <option value="checkbox">Checkbox</option>
-                    </select>
-
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={question.required}
-                        onChange={(e) => {
-                          const newQuestions = [...tour.intakeForm.customQuestions];
-                          newQuestions[index] = { ...question, required: e.target.checked };
-                          updateTour({
-                            intakeForm: { ...tour.intakeForm, customQuestions: newQuestions }
-                          });
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-xs 2xl:text-sm text-gray-600">Required</span>
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-
-    case 6:
-      return (
-        <div className="space-y-4 2xl:space-y-6">
-          <div>
-            <div className="flex flex-col 2xl:flex-row 2xl:items-center 2xl:justify-between gap-3 2xl:gap-0 mb-3 2xl:mb-4">
-              <h3 className="text-base 2xl:text-lg font-medium text-gray-900">Reminder Emails</h3>
-              <button
-                type="button"
-                onClick={addReminderEmail}
-                className="text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center space-x-1 self-start"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="text-sm">Add Reminder</span>
-              </button>
-            </div>
-
-            <div className="space-y-2 2xl:space-y-3">
-              {tour.reminderEmails.map((reminder, index) => (
-                <div key={index} className="flex flex-col 2xl:flex-row 2xl:items-center gap-2 2xl:gap-3 bg-gray-50 p-3 rounded-lg">
-                  <span className="text-xs 2xl:text-sm text-gray-600">Send reminder</span>
-                  <div className="flex items-center space-x-2 flex-1">
-                    <input
-                      type="number"
-                      min="1"
-                      className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
-                      value={reminder.timing}
-                      onChange={(e) => {
-                        const newReminders = [...tour.reminderEmails];
-                        newReminders[index] = { ...reminder, timing: parseInt(e.target.value) || 1 };
-                        updateTour({ reminderEmails: newReminders });
-                      }}
-                    />
-                    <select
-                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs 2xl:text-sm"
-                      value={reminder.unit}
-                      onChange={(e) => {
-                        const newReminders = [...tour.reminderEmails];
-                        newReminders[index] = { ...reminder, unit: e.target.value as any };
-                        updateTour({ reminderEmails: newReminders });
-                      }}
-                    >
-                      <option value="hours">Hours</option>
-                      <option value="days">Days</option>
-                      <option value="weeks">Weeks</option>
-                    </select>
-                    <span className="text-xs 2xl:text-sm text-gray-600 whitespace-nowrap">before tour</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeReminderEmail(index)}
-                    className="text-red-600 hover:bg-red-50 p-1 rounded self-start 2xl:self-center"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Session Instructions</label>
-            <textarea
-              rows={4}
-              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
-              placeholder="Instructions that will be sent to attendees before the tour (parking info, what to bring, meeting location, etc.)"
-              value={tour.sessionInstructions}
-              onChange={(e) => updateTour({ sessionInstructions: e.target.value })}
-            />
-          </div>
-        </div>
-      );
-
-    case 7:
       return (
         <div className="space-y-4 2xl:space-y-6">
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 2xl:p-6 text-center">
@@ -985,13 +654,13 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                   const slots = tour.weeklyHours[day] || [];
                   return (
                     <div key={day} className="text-xs 2xl:text-sm">
-                      <span className="inline-block w-16 2xl:w-20 font-medium">{day}:</span>
+                      <span className="inline-block w-20 2xl:w-24 mr-2 font-medium">{day}:</span>
                       {slots.length === 0 ? (
                         <span className="text-gray-500">Unavailable</span>
                       ) : (
                         slots.map((slot, i) => (
                           <span key={i} className="text-gray-900 mr-2 2xl:mr-3 inline-block">
-                            {slot.start} - {slot.end}
+                            {formatTime12Hour(slot.start)} - {formatTime12Hour(slot.end)}
                           </span>
                         ))
                       )}
@@ -1131,12 +800,6 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               <p className="text-gray-600">Configure booking rules and policies for this tour.</p>
             )}
             {currentStep === 5 && (
-              <p className="text-gray-600">Customize what information you'll collect from tour attendees.</p>
-            )}
-            {currentStep === 6 && (
-              <p className="text-gray-600">Set up automated communications for tour attendees.</p>
-            )}
-            {currentStep === 7 && (
               <p className="text-gray-600">Review everything and publish your tour.</p>
             )}
           </div>
@@ -1207,6 +870,18 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   tours: Tour[];
   setTours: Dispatch<SetStateAction<Tour[]>>;
 }) {
+  const normalizeBlockedTimes = (times: string[]) =>
+    Array.from(new Set(times.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+  const normalizeBlockedRanges = (ranges: { start: string; end: string }[]) =>
+    Array.from(
+      new Map(
+        ranges
+          .filter((range) => range.start && range.end)
+          .map((range) => [`${range.start}|${range.end}`, range])
+      ).values()
+    ).sort((a, b) => `${a.start}|${a.end}`.localeCompare(`${b.start}|${b.end}`));
+
   const [searchTerm] = useState('');
   const [filterStatus] = useState<'all' | 'published' | 'draft'>('all');
   const [reordering, setReordering] = useState(false);
@@ -1214,12 +889,12 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     startDate: string;
     endDate: string;
     unavailable: boolean;
-    slots: { start: string; end: string }[];
+    blockedRanges: { start: string; end: string }[];
   }>({
     startDate: '',
     endDate: '',
     unavailable: true,
-    slots: [{ start: '12:00', end: '17:00' }],
+    blockedRanges: [{ start: '11:00', end: '13:00' }],
   });
 
   const sortByDisplayOrder = (a: Tour, b: Tour) =>
@@ -1348,12 +1023,20 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   const orderedFilteredTours = [...filteredTours].sort(sortByDisplayOrder);
 
   const universalOverrides = useMemo(() => {
-    const map: Record<string, { startDate: string; endDate?: string; unavailable?: boolean; slots?: any[] }> = {};
+    const map: Record<string, { startDate: string; endDate?: string; unavailable?: boolean; slots?: any[]; blockedTimes?: string[]; blockedRanges?: { start: string; end: string }[] }> = {};
     tours.forEach((tour) => {
       (tour.dateSpecificBlockDays || []).forEach((d) => {
-        if (d.appliesToAllTours && (d.unavailable || (d.slots && d.slots.length))) {
+        if (d.appliesToAllTours && (d.unavailable || (d.slots && d.slots.length) || (d.blockedTimes && d.blockedTimes.length) || (d.blockedRanges && d.blockedRanges.length))) {
           const key = `${d.startDate}|${d.endDate || d.startDate}`;
-          map[key] = { startDate: d.startDate, endDate: d.endDate, unavailable: d.unavailable, slots: d.slots || [] };
+          const existing = map[key];
+          map[key] = {
+            startDate: d.startDate,
+            endDate: d.endDate,
+            unavailable: existing?.unavailable || d.unavailable,
+            slots: [...(existing?.slots || []), ...(d.slots || [])],
+            blockedTimes: normalizeBlockedTimes([...(existing?.blockedTimes || []), ...(d.blockedTimes || [])]),
+            blockedRanges: normalizeBlockedRanges([...(existing?.blockedRanges || []), ...(d.blockedRanges || [])]),
+          };
         }
       });
     });
@@ -1365,13 +1048,15 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
       alert('Please select a start date');
       return;
     }
-    const slots = globalHolidayForm.unavailable
+    const blockedRanges = globalHolidayForm.unavailable
       ? []
-      : (globalHolidayForm.slots || []).filter((s) => s.start && s.end);
+      : normalizeBlockedRanges(globalHolidayForm.blockedRanges || []);
     const newOverride = {
       startDate: globalHolidayForm.startDate,
       endDate: globalHolidayForm.endDate || globalHolidayForm.startDate,
-      slots,
+      slots: [],
+      blockedTimes: [],
+      blockedRanges,
       unavailable: globalHolidayForm.unavailable,
       appliesToAllTours: true,
     };
@@ -1381,36 +1066,64 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
         tours.map(async (tour) => {
           if (!tour.tourId) return;
           const existing = tour.dateSpecificBlockDays || [];
-          const exists = existing.some(
+          const matchIndex = existing.findIndex(
             (d) =>
               d.appliesToAllTours &&
-              d.unavailable === newOverride.unavailable &&
               d.startDate === newOverride.startDate &&
               (d.endDate || d.startDate) === (newOverride.endDate || newOverride.startDate)
           );
-          if (exists) return;
-          const updated = [...existing, newOverride];
+
+          const updated = [...existing];
+          if (matchIndex >= 0) {
+            const current = updated[matchIndex];
+            updated[matchIndex] = {
+              ...current,
+              unavailable: newOverride.unavailable,
+              appliesToAllTours: true,
+              slots: newOverride.unavailable ? [] : (current.slots || []),
+              blockedTimes: newOverride.unavailable ? [] : (current.blockedTimes || []),
+              blockedRanges: newOverride.unavailable
+                ? []
+                : normalizeBlockedRanges([...(current.blockedRanges || []), ...newOverride.blockedRanges]),
+            };
+          } else {
+            updated.push(newOverride);
+          }
           await updateDoc(doc(db, 'Tours', tour.tourId), { dateSpecificBlockDays: updated });
         })
       );
       setTours((prev: Tour[]) =>
         prev.map((tour: Tour) => ({
           ...tour,
-          dateSpecificBlockDays: [
-            ...(tour.dateSpecificBlockDays || []),
-            ...(tour.dateSpecificBlockDays || []).some(
+          dateSpecificBlockDays: (() => {
+            const existing = [...(tour.dateSpecificBlockDays || [])];
+            const matchIndex = existing.findIndex(
               (d: any) =>
                 d.appliesToAllTours &&
-                d.unavailable === newOverride.unavailable &&
                 d.startDate === newOverride.startDate &&
                 (d.endDate || d.startDate) === (newOverride.endDate || newOverride.startDate)
-            )
-              ? []
-              : [newOverride],
-          ],
+            );
+
+            if (matchIndex >= 0) {
+              const current = existing[matchIndex];
+              existing[matchIndex] = {
+                ...current,
+                unavailable: newOverride.unavailable,
+                appliesToAllTours: true,
+                slots: newOverride.unavailable ? [] : (current.slots || []),
+                blockedTimes: newOverride.unavailable ? [] : (current.blockedTimes || []),
+                blockedRanges: newOverride.unavailable
+                  ? []
+                  : normalizeBlockedRanges([...(current.blockedRanges || []), ...newOverride.blockedRanges]),
+              };
+              return existing;
+            }
+
+            return [...existing, newOverride];
+          })(),
         }))
       );
-      setGlobalHolidayForm({ startDate: '', endDate: '', unavailable: true, slots: [{ start: '12:00', end: '17:00' }] });
+      setGlobalHolidayForm({ startDate: '', endDate: '', unavailable: true, blockedRanges: [{ start: '11:00', end: '13:00' }] });
     } catch (err) {
       console.error('Error adding universal holiday:', err);
       alert('Failed to add universal holiday date.');
@@ -1612,10 +1325,10 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
             <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-blue-600" />
-                Universal Holiday Dates
+                Block Out Dates
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                Dates marked as unavailable for all tours.
+                Dates marked apply to all tours.
               </p>
 
               <div className="mt-4 space-y-2">
@@ -1646,7 +1359,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                       setGlobalHolidayForm((prev) => ({
                         ...prev,
                         unavailable: e.target.checked,
-                        slots: e.target.checked ? [] : (prev.slots.length ? prev.slots : [{ start: '12:00', end: '17:00' }])
+                        blockedRanges: e.target.checked ? [] : (prev.blockedRanges.length ? prev.blockedRanges : [{ start: '11:00', end: '13:00' }])
                       }))
                     }
                   />
@@ -1656,13 +1369,13 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                 {!globalHolidayForm.unavailable && (
                   <div className="mt-2 space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">Custom Time Slots</label>
+                      <label className="text-sm font-medium text-gray-700">Blocked Time Ranges</label>
                       <button
                         type="button"
                         onClick={() =>
                           setGlobalHolidayForm((prev) => ({
                             ...prev,
-                            slots: [...prev.slots, { start: '12:00', end: '17:00' }]
+                            blockedRanges: [...prev.blockedRanges, { start: '11:00', end: '13:00' }]
                           }))
                         }
                         className="text-blue-600 hover:bg-blue-50 p-1 rounded-lg"
@@ -1670,20 +1383,20 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                         <Plus className="h-4 w-4" />
                       </button>
                     </div>
-                    {globalHolidayForm.slots.length === 0 && (
-                      <p className="text-xs text-gray-500">No slots set; will use weekly hours.</p>
+                    {globalHolidayForm.blockedRanges.length === 0 && (
+                      <p className="text-xs text-gray-500">No blocked ranges set.</p>
                     )}
-                    {globalHolidayForm.slots.map((slot, idx) => (
+                    {globalHolidayForm.blockedRanges.map((range, idx) => (
                       <div key={idx} className="flex items-center space-x-2">
                         <input
                           type="time"
                           className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
-                          value={slot.start}
+                          value={range.start}
                           onChange={(e) =>
                             setGlobalHolidayForm((prev) => {
-                              const slots = [...prev.slots];
-                              slots[idx] = { ...slot, start: e.target.value };
-                              return { ...prev, slots };
+                              const blockedRanges = [...prev.blockedRanges];
+                              blockedRanges[idx] = { ...range, start: e.target.value };
+                              return { ...prev, blockedRanges };
                             })
                           }
                         />
@@ -1691,12 +1404,12 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                         <input
                           type="time"
                           className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
-                          value={slot.end}
+                          value={range.end}
                           onChange={(e) =>
                             setGlobalHolidayForm((prev) => {
-                              const slots = [...prev.slots];
-                              slots[idx] = { ...slot, end: e.target.value };
-                              return { ...prev, slots };
+                              const blockedRanges = [...prev.blockedRanges];
+                              blockedRanges[idx] = { ...range, end: e.target.value };
+                              return { ...prev, blockedRanges };
                             })
                           }
                         />
@@ -1705,7 +1418,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                           onClick={() =>
                             setGlobalHolidayForm((prev) => ({
                               ...prev,
-                              slots: prev.slots.filter((_, i) => i !== idx)
+                              blockedRanges: prev.blockedRanges.filter((_, i) => i !== idx)
                             }))
                           }
                           className="text-red-600 hover:bg-red-50 p-1 rounded-lg"
@@ -1721,7 +1434,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                   onClick={addUniversalHoliday}
                   className="w-full mt-2 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium"
                 >
-                  Add Universal Holiday
+                  Add Blocked Date
                 </button>
               </div>
 
@@ -1741,6 +1454,16 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                             {d.startDate}
                             {d.endDate && d.endDate !== d.startDate ? ` → ${d.endDate}` : ''}
                           </div>
+                          {d.blockedTimes && d.blockedTimes.length > 0 && (
+                            <div className="text-xs text-amber-700 mt-1">
+                              Blocked times: {d.blockedTimes.join(', ')}
+                            </div>
+                          )}
+                          {d.blockedRanges && d.blockedRanges.length > 0 && (
+                            <div className="text-xs text-amber-700 mt-1">
+                              Blocked ranges: {d.blockedRanges.map((range) => `${range.start} - ${range.end}`).join(', ')}
+                            </div>
+                          )}
                           {d.slots && d.slots.length > 0 && (
                             <div className="text-xs text-gray-600 mt-1">
                               {d.slots.map((s: any, i: number) => (
