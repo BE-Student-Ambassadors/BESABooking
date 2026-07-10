@@ -20,6 +20,29 @@ import ParkingInstructionsPage from './pages/ParkingInstructionsPage.tsx';
 import AdminPage from './pages/admin/adminLogin.tsx'; 
 import ModifyBookingsPage from './pages/ModifyBookings.tsx';
 
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const normalizeWeeklyHours = (weeklyHours?: WeeklyHours): WeeklyHours =>
+  DAYS_OF_WEEK.reduce<WeeklyHours>((acc, day) => {
+    acc[day] = [...(weeklyHours?.[day] || [])];
+    return acc;
+  }, {});
+
+const normalizeAvailabilityRanges = (data: any): AvailabilityRange[] => {
+  if (Array.isArray(data.availabilityRanges) && data.availabilityRanges.length > 0) {
+    return data.availabilityRanges.map((range: any) => ({
+      startDate: range.startDate ?? "",
+      endDate: range.endDate ?? "",
+      weeklyHours: normalizeWeeklyHours(range.weeklyHours),
+    }));
+  }
+
+  return [{
+    startDate: data.startDate ?? "",
+    endDate: data.endDate ?? "",
+    weeklyHours: normalizeWeeklyHours(data.weeklyHours),
+  }];
+};
+
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +113,8 @@ function App() {
             location: data.location ?? "",
             zoomLink: data.zoomLink ?? "",
             autoGenerateZoom: data.autoGenerateZoom ?? false,
-            weeklyHours: data.weeklyHours ?? {},
+            weeklyHours: normalizeWeeklyHours(data.weeklyHours),
+            availabilityRanges: normalizeAvailabilityRanges(data),
             dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
             dateSpecificDays: data.dateSpecificDays ?? [], 
             frequency: data.frequency ?? 1,

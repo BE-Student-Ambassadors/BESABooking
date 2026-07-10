@@ -4,6 +4,29 @@ import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, query, where, l
 import { db } from "../../src/firebase.ts";
 import { ArrowLeft, Calendar, Clock, Search, Loader2, Trash2, Save } from "lucide-react";
 
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const normalizeWeeklyHours = (weeklyHours?: WeeklyHours): WeeklyHours =>
+  DAYS_OF_WEEK.reduce<WeeklyHours>((acc, day) => {
+    acc[day] = [...(weeklyHours?.[day] || [])];
+    return acc;
+  }, {});
+
+const normalizeAvailabilityRanges = (tourLike: Partial<Tour>): AvailabilityRange[] => {
+  if (tourLike.availabilityRanges?.length) {
+    return tourLike.availabilityRanges.map((range) => ({
+      startDate: range.startDate || "",
+      endDate: range.endDate || "",
+      weeklyHours: normalizeWeeklyHours(range.weeklyHours),
+    }));
+  }
+
+  return [{
+    startDate: tourLike.startDate || "",
+    endDate: tourLike.endDate || "",
+    weeklyHours: normalizeWeeklyHours(tourLike.weeklyHours),
+  }];
+};
+
 type BookingDoc = {
   tourId?: string;
   tourType?: string;
@@ -96,7 +119,13 @@ const ModifyBookingsPage: React.FC = () => {
         try {
           const tourSnap = await getDoc(doc(db, "Tours", data.tourId as string));
           if (tourSnap.exists()) {
-            setTour({ tourId: tourSnap.id, ...(tourSnap.data() as any) } as Tour);
+            const tourData = tourSnap.data() as any;
+            setTour({
+              tourId: tourSnap.id,
+              ...tourData,
+              weeklyHours: tourData.weeklyHours ?? {},
+              availabilityRanges: normalizeAvailabilityRanges(tourData),
+            } as Tour);
           }
         } catch (e) {
           console.warn("Could not load tour for validation", e);
@@ -242,6 +271,19 @@ const ModifyBookingsPage: React.FC = () => {
       return slots;
     };
 
+    const isDateWithinRange = (dateStr: string, start?: string, end?: string) => {
+      if (!start) return false;
+      const dateVal = new Date(dateStr + "T00:00:00");
+      const startVal = new Date(start + "T00:00:00");
+      const endVal = end ? new Date(end + "T23:59:59") : new Date(start + "T23:59:59");
+      return dateVal >= startVal && dateVal <= endVal;
+    };
+
+    const getMatchingAvailabilityRange = (dateStr: string, currentTour: Tour) =>
+      normalizeAvailabilityRanges(currentTour).find((range) =>
+        isDateWithinRange(dateStr, range.startDate, range.endDate)
+      );
+
     const hasSlotForDateTime = (dt: Date, formatted: string, t: Tour) => {
       const weekday = dt.toLocaleDateString("en-US", { weekday: "long" });
       const minutes = toMinutes(formatted);
@@ -262,10 +304,14 @@ const ModifyBookingsPage: React.FC = () => {
         const end = new Date((d.endDate || d.startDate) + "T23:59:59");
         return dt >= start && dt <= end;
       });
+      const matchingRange = getMatchingAvailabilityRange(
+        `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`,
+        t
+      );
 
       const slotWindows = override?.slots?.length
         ? override.slots
-        : t.weeklyHours?.[weekday] || [];
+        : matchingRange?.weeklyHours?.[weekday] || t.weeklyHours?.[weekday] || [];
 
       if (!slotWindows || slotWindows.length === 0) return false;
 
