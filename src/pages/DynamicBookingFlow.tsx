@@ -68,6 +68,29 @@ interface CustomCalendarProps {
   maxDate?: Date | null;
 }
 
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const normalizeWeeklyHours = (weeklyHours?: WeeklyHours): WeeklyHours =>
+  DAYS_OF_WEEK.reduce<WeeklyHours>((acc, day) => {
+    acc[day] = [...(weeklyHours?.[day] || [])];
+    return acc;
+  }, {});
+
+const normalizeAvailabilityRanges = (tourLike: Partial<Tour>): AvailabilityRange[] => {
+  if (tourLike.availabilityRanges?.length) {
+    return tourLike.availabilityRanges.map((range) => ({
+      startDate: range.startDate || "",
+      endDate: range.endDate || "",
+      weeklyHours: normalizeWeeklyHours(range.weeklyHours),
+    }));
+  }
+
+  return [{
+    startDate: tourLike.startDate || "",
+    endDate: tourLike.endDate || "",
+    weeklyHours: normalizeWeeklyHours(tourLike.weeklyHours),
+  }];
+};
+
 const startOfWeek = (date: Date) => {
   const base = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   base.setDate(base.getDate() - base.getDay());
@@ -378,7 +401,8 @@ function BookingPage() {
             location: data.location ?? "",
             zoomLink: data.zoomLink ?? "",
             autoGenerateZoom: data.autoGenerateZoom ?? false,
-            weeklyHours: data.weeklyHours ?? {},
+            weeklyHours: normalizeWeeklyHours(data.weeklyHours),
+            availabilityRanges: normalizeAvailabilityRanges(data),
             dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
             dateSpecificDays: data.dateSpecificDays ?? [], // ← Add this
             frequency: data.frequency ?? 1,
@@ -635,6 +659,9 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     return date >= startDate && date <= endDate;
   };
 
+  const getMatchingAvailabilityRange = (dateStr: string, tour: Tour) =>
+    normalizeAvailabilityRanges(tour).find((range) => isDateInRange(dateStr, range.startDate, range.endDate));
+
   const findDateOverride = (dateStr: string, tour: Tour) =>
     tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
 
@@ -840,20 +867,11 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const dayOfWeek = dayNames[selectedDate.getDay()];
 
-    // Check if date falls within any dateSpecificDays range
-    const isInDateRange = tour.dateSpecificDays?.some(range => {
-      const start = new Date(range.startDate);
-      const end = new Date(range.endDate);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
-      return selectedDate >= start && selectedDate <= end;
-    });
+    const matchingRange = getMatchingAvailabilityRange(dateString, tour);
+    const hasRangeHours = (matchingRange?.weeklyHours?.[dayOfWeek] || []).length > 0;
+    const hasLegacyWeeklyHours = tour.weeklyHours?.[dayOfWeek]?.length > 0;
 
-    // Check if the day of week has available hours in weeklyHours
-    const hasWeeklyHours = tour.weeklyHours?.[dayOfWeek]?.length > 0;
-
-    // Date must either be in a date range OR have weekly hours for that day
-    if (!isInDateRange && !hasWeeklyHours) {
+    if (!hasRangeHours && !hasLegacyWeeklyHours) {
       return {
         available: false,
         reason: "Unable to book on this day. Please select an available date."
@@ -1093,12 +1111,22 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       minNoticeDate.setDate(minNoticeDate.getDate() + 1);
       minNoticeDate.setHours(0, 0, 0, 0);
 
-      // Get dateSpecificDays range if it exists
+      // Get range coverage from availabilityRanges first, then legacy dateSpecificDays
       let rangeMinDate = null;
       let rangeMaxDate = null;
 
-      if (selectedTourData.dateSpecificDays && selectedTourData.dateSpecificDays.length > 0) {
-        // Find the earliest startDate and latest endDate in the array
+      const availabilityRanges = normalizeAvailabilityRanges(selectedTourData)
+        .filter((range) => range.startDate && range.endDate);
+
+      if (availabilityRanges.length > 0) {
+        const dates = availabilityRanges.map((range) => ({
+          start: new Date(range.startDate + 'T00:00:00'),
+          end: new Date(range.endDate + 'T23:59:59')
+        }));
+
+        rangeMinDate = new Date(Math.min(...dates.map(d => d.start.getTime())));
+        rangeMaxDate = new Date(Math.max(...dates.map(d => d.end.getTime())));
+      } else if (selectedTourData.dateSpecificDays && selectedTourData.dateSpecificDays.length > 0) {
         const dates = selectedTourData.dateSpecificDays.map(d => ({
           start: new Date(d.startDate + 'T00:00:00'),
           end: new Date(d.endDate + 'T23:59:59')
@@ -1106,12 +1134,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
         rangeMinDate = new Date(Math.min(...dates.map(d => d.start.getTime())));
         rangeMaxDate = new Date(Math.max(...dates.map(d => d.end.getTime())));
-
-        console.log('dateSpecificDays range:', rangeMinDate.toDateString(), 'to', rangeMaxDate.toDateString());
       }
-
-
-      // Use the later of: 24-hour notice or range start date
       let minDate = [minNoticeDate, rangeMinDate, tourStart]
         .filter((d): d is Date => !!d)
         .reduce((max, d) => (d > max ? d : max), minNoticeDate);
@@ -1190,11 +1213,10 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
           generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
         );
       } else {
-        // Fall back to weekly hours
         const dateObj = new Date(dateStr + 'T00:00:00');
         const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" });
-
-        const weekly = selectedTourData.weeklyHours?.[dayOfWeek];
+        const matchingRange = getMatchingAvailabilityRange(dateStr, selectedTourData);
+        const weekly = matchingRange?.weeklyHours?.[dayOfWeek] || selectedTourData.weeklyHours?.[dayOfWeek];
 
         if (weekly && weekly.length > 0) {
           allTimeSlots = weekly.flatMap((slot) =>
@@ -1482,12 +1504,11 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
           generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
         );
       } else {
-        // Fall back to weekly hours
         const dateObj = new Date(date + 'T00:00:00');
         const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" });
         console.log("Day of week:", dayOfWeek);
-
-        const weekly = selected.weeklyHours?.[dayOfWeek];
+        const matchingRange = getMatchingAvailabilityRange(date, selected);
+        const weekly = matchingRange?.weeklyHours?.[dayOfWeek] || selected.weeklyHours?.[dayOfWeek];
         console.log("Weekly hours for", dayOfWeek, ":", weekly);
 
         if (weekly && weekly.length > 0) {

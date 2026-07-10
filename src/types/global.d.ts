@@ -12,6 +12,14 @@ declare global {
         id: string;
     }
 
+    type WeeklySlot = { start: string; end: string };
+    type WeeklyHours = Record<string, WeeklySlot[]>;
+    type AvailabilityRange = {
+        startDate: string;
+        endDate: string;
+        weeklyHours: WeeklyHours;
+    };
+
 
     type Tour = {
         tourId: string; // Unique identifier
@@ -30,7 +38,8 @@ declare global {
         autoGenerateZoom: boolean;
 
         // Availability
-        weeklyHours: {[key: string]: { start: string; end: string }[];}; // Weekly recurring hours
+        weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours
+        availabilityRanges?: AvailabilityRange[]; // Date ranges with their own recurring hours
         // Example: { monday: [{ start: '09:00', end: '17:00' }], tuesday: [...] }  
 
         // Date-Specific Availability
@@ -176,8 +185,6 @@ declare global {
     };
 
     type UserRole = 'public' | 'admin';
-    type WeeklySlot = { start: string; end: string };
-    type WeeklyHours = Record<string, WeeklySlot[]>;
     type DateSpecificSlot = { start: string; end: string };
     type DateSpecificHours = { date: string; unavailable?: boolean; slots: DateSpecificSlot[] };
     

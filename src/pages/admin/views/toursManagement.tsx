@@ -10,6 +10,43 @@ import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "fireb
 
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const EMPTY_WEEKLY_HOURS = DAYS_OF_WEEK.reduce<WeeklyHours>((acc, day) => {
+  acc[day] = [];
+  return acc;
+}, {});
+const createDefaultAvailabilityRange = (): AvailabilityRange => ({
+  startDate: '',
+  endDate: '',
+  weeklyHours: { ...EMPTY_WEEKLY_HOURS },
+});
+const normalizeWeeklyHours = (weeklyHours?: WeeklyHours): WeeklyHours =>
+  DAYS_OF_WEEK.reduce<WeeklyHours>((acc, day) => {
+    acc[day] = [...(weeklyHours?.[day] || [])];
+    return acc;
+  }, {});
+const normalizeAvailabilityRanges = (tour?: Tour): AvailabilityRange[] => {
+  if (tour?.availabilityRanges?.length) {
+    return tour.availabilityRanges.map((range) => ({
+      startDate: range.startDate || '',
+      endDate: range.endDate || '',
+      weeklyHours: normalizeWeeklyHours(range.weeklyHours),
+    }));
+  }
+
+  if (
+    tour?.startDate ||
+    tour?.endDate ||
+    DAYS_OF_WEEK.some((day) => (tour?.weeklyHours?.[day] || []).length > 0)
+  ) {
+    return [{
+      startDate: tour?.startDate || '',
+      endDate: tour?.endDate || '',
+      weeklyHours: normalizeWeeklyHours(tour?.weeklyHours),
+    }];
+  }
+
+  return [createDefaultAvailabilityRange()];
+};
 
 function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour?: Tour; onSaveTour: (tour: Tour) => void;}) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -25,6 +62,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     zoomLink: '',
     autoGenerateZoom: false,
     weeklyHours: {},
+    availabilityRanges: [createDefaultAvailabilityRange()],
     dateSpecificBlockDays: [],
     dateSpecificDays: [],
     frequency: 60,
@@ -51,6 +89,13 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     published: false
   });
 
+  useEffect(() => {
+    setTour((prev) => ({
+      ...prev,
+      availabilityRanges: normalizeAvailabilityRanges(prev),
+    }));
+  }, []);
+
   const isEditing = !!editingTour;
 
   const steps = [
@@ -65,23 +110,48 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     setTour(prev => ({ ...prev, ...updates }));
   };
 
-  const addWeeklyTimeSlot = (day: string) => {
-    const newSlot = { start: '09:00', end: '17:00' };
+  const updateAvailabilityRange = (rangeIndex: number, updates: Partial<AvailabilityRange>) => {
+    const nextRanges = [...(tour.availabilityRanges || [])];
+    const existing = nextRanges[rangeIndex] || createDefaultAvailabilityRange();
+    nextRanges[rangeIndex] = {
+      ...existing,
+      ...updates,
+      weeklyHours: normalizeWeeklyHours(updates.weeklyHours || existing.weeklyHours),
+    };
+    updateTour({ availabilityRanges: nextRanges });
+  };
+
+  const addAvailabilityRange = () => {
     updateTour({
+      availabilityRanges: [...(tour.availabilityRanges || []), createDefaultAvailabilityRange()]
+    });
+  };
+
+  const removeAvailabilityRange = (rangeIndex: number) => {
+    const nextRanges = (tour.availabilityRanges || []).filter((_, index) => index !== rangeIndex);
+    updateTour({
+      availabilityRanges: nextRanges.length ? nextRanges : [createDefaultAvailabilityRange()]
+    });
+  };
+
+  const addWeeklyTimeSlot = (rangeIndex: number, day: string) => {
+    const newSlot = { start: '09:00', end: '17:00' };
+    const range = (tour.availabilityRanges || [])[rangeIndex] || createDefaultAvailabilityRange();
+    updateAvailabilityRange(rangeIndex, {
       weeklyHours: {
-        ...tour.weeklyHours,
-        [day]: [...(tour.weeklyHours[day] || []), newSlot]
+        ...range.weeklyHours,
+        [day]: [...(range.weeklyHours[day] || []), newSlot]
       }
     });
   };
 
-  const removeWeeklyTimeSlot = (day: string, index: number) => {
-    const daySlots = tour.weeklyHours[day] || [];
-    const newSlots = daySlots.filter((_, i) => i !== index);
-    updateTour({
+  const removeWeeklyTimeSlot = (rangeIndex: number, day: string, index: number) => {
+    const range = (tour.availabilityRanges || [])[rangeIndex] || createDefaultAvailabilityRange();
+    const daySlots = range.weeklyHours[day] || [];
+    updateAvailabilityRange(rangeIndex, {
       weeklyHours: {
-        ...tour.weeklyHours,
-        [day]: newSlots
+        ...range.weeklyHours,
+        [day]: daySlots.filter((_, i) => i !== index)
       }
     });
   };
@@ -228,59 +298,119 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
   return (
   <div className="space-y-6 2xl:space-y-8">
 
-    {/* Weekly Recurring Hours */}
+    {/* Availability Ranges */}
     <div>
-      <h3 className="text-base 2xl:text-lg font-medium text-gray-900 mb-3 2xl:mb-4">Weekly Recurring Hours</h3>
+      <div className="flex items-center justify-between mb-3 2xl:mb-4">
+        <div>
+          <h3 className="text-base 2xl:text-lg font-medium text-gray-900">Availability Ranges</h3>
+          <p className="text-xs 2xl:text-sm text-gray-500 mt-1">
+            Add date windows and set separate recurring hours for each one.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={addAvailabilityRange}
+          className="text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg flex items-center space-x-1"
+        >
+          <Plus className="h-4 w-4" />
+          <span className="text-sm">Add Range</span>
+        </button>
+      </div>
+
       <div className="space-y-3 2xl:space-y-4">
-        {DAYS_OF_WEEK.map((day) => (
-          <div key={day} className="border border-gray-200 rounded-lg p-3 2xl:p-4">
-            <div className="flex items-center justify-between mb-2 2xl:mb-3">
-              <h4 className="text-sm 2xl:text-base font-medium text-gray-900">{day}</h4>
+        {(tour.availabilityRanges || []).map((range, rangeIndex) => (
+          <div key={rangeIndex} className="border border-gray-200 rounded-lg p-3 2xl:p-4 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={range.startDate || ''}
+                    onChange={(e) => updateAvailabilityRange(rangeIndex, { startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    value={range.endDate || ''}
+                    onChange={(e) => updateAvailabilityRange(rangeIndex, { endDate: e.target.value })}
+                  />
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => addWeeklyTimeSlot(day)}
-                className="text-blue-600 hover:bg-blue-50 p-1 rounded-lg"
+                onClick={() => removeAvailabilityRange(rangeIndex)}
+                className="text-red-600 hover:bg-red-50 p-2 rounded-lg mt-6"
               >
-                <Plus className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {(tour.weeklyHours[day] || []).length === 0 && (
-              <p className="text-gray-500 text-xs 2xl:text-sm">No time slots set for this day</p>
+            {range.startDate && range.endDate && new Date(range.startDate) > new Date(range.endDate) && (
+              <p className="text-red-600 text-xs">End date must be after start date</p>
             )}
 
-            {(tour.weeklyHours[day] || []).map((slot, index) => (
-              <div key={index} className="flex items-center space-x-2 mb-2 last:mb-0">
-                <input
-                  type="time"
-                  className="flex-1 px-2 2xl:px-3 py-1 2xl:py-2 border border-gray-300 rounded-lg text-xs 2xl:text-sm"
-                  value={slot.start}
-                  onChange={(e) => {
-                    const newSlots = [...(tour.weeklyHours[day] || [])];
-                    newSlots[index] = { ...slot, start: e.target.value };
-                    updateTour({ weeklyHours: { ...tour.weeklyHours, [day]: newSlots } });
-                  }}
-                />
-                <span className="text-gray-500 text-xs 2xl:text-sm">to</span>
-                <input
-                  type="time"
-                  className="flex-1 px-2 2xl:px-3 py-1 2xl:py-2 border border-gray-300 rounded-lg text-xs 2xl:text-sm"
-                  value={slot.end}
-                  onChange={(e) => {
-                    const newSlots = [...(tour.weeklyHours[day] || [])];
-                    newSlots[index] = { ...slot, end: e.target.value };
-                    updateTour({ weeklyHours: { ...tour.weeklyHours, [day]: newSlots } });
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeWeeklyTimeSlot(day, index)}
-                  className="text-red-600 hover:bg-red-50 p-1 rounded-lg flex-shrink-0"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+            <div className="space-y-3 2xl:space-y-4">
+              {DAYS_OF_WEEK.map((day) => (
+                <div key={`${rangeIndex}-${day}`} className="border border-gray-200 rounded-lg p-3 2xl:p-4">
+                  <div className="flex items-center justify-between mb-2 2xl:mb-3">
+                    <h4 className="text-sm 2xl:text-base font-medium text-gray-900">{day}</h4>
+                    <button
+                      type="button"
+                      onClick={() => addWeeklyTimeSlot(rangeIndex, day)}
+                      className="text-blue-600 hover:bg-blue-50 p-1 rounded-lg"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {(range.weeklyHours[day] || []).length === 0 && (
+                    <p className="text-gray-500 text-xs 2xl:text-sm">No time slots set for this day</p>
+                  )}
+
+                  {(range.weeklyHours[day] || []).map((slot, index) => (
+                    <div key={index} className="flex items-center space-x-2 mb-2 last:mb-0">
+                      <input
+                        type="time"
+                        className="flex-1 px-2 2xl:px-3 py-1 2xl:py-2 border border-gray-300 rounded-lg text-xs 2xl:text-sm"
+                        value={slot.start}
+                        onChange={(e) => {
+                          const newSlots = [...(range.weeklyHours[day] || [])];
+                          newSlots[index] = { ...slot, start: e.target.value };
+                          updateAvailabilityRange(rangeIndex, {
+                            weeklyHours: { ...range.weeklyHours, [day]: newSlots }
+                          });
+                        }}
+                      />
+                      <span className="text-gray-500 text-xs 2xl:text-sm">to</span>
+                      <input
+                        type="time"
+                        className="flex-1 px-2 2xl:px-3 py-1 2xl:py-2 border border-gray-300 rounded-lg text-xs 2xl:text-sm"
+                        value={slot.end}
+                        onChange={(e) => {
+                          const newSlots = [...(range.weeklyHours[day] || [])];
+                          newSlots[index] = { ...slot, end: e.target.value };
+                          updateAvailabilityRange(rangeIndex, {
+                            weeklyHours: { ...range.weeklyHours, [day]: newSlots }
+                          });
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeWeeklyTimeSlot(rangeIndex, day, index)}
+                        className="text-red-600 hover:bg-red-50 p-1 rounded-lg flex-shrink-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -314,31 +444,6 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
         <p className="text-xs text-gray-500 mt-2">
           Based on tour duration of {tour.duration} {tour.durationUnit}
         </p>
-      </div>
-    </div>
-
-    {/* Date-Specific Days */}
-    <div className="border-t pt-4 2xl:pt-6">
-      <h3 className="text-base 2xl:text-lg font-medium text-gray-900 mb-3 2xl:mb-4">Date-Specific Availability</h3>
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 2xl:p-4 space-y-3">
-        <label className="block text-sm font-medium text-gray-700">Start Date</label>
-        <input
-          type="date"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          value={tour.startDate || ''}
-          onChange={(e) => updateTour({ startDate: e.target.value })}
-        />
-
-        <label className="block text-sm font-medium text-gray-700">End Date</label>
-        <input
-          type="date"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          value={tour.endDate || ''}
-          onChange={(e) => updateTour({ endDate: e.target.value })}
-        />
-        {tour.startDate && tour.endDate && new Date(tour.startDate) > new Date(tour.endDate) && (
-          <p className="text-red-600 text-xs">End date must be after start date</p>
-        )}
       </div>
     </div>
 
@@ -648,25 +753,34 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             </div>
             
             <div className="mt-3 2xl:mt-4 pt-3 2xl:pt-4 border-t">
-              <span className="font-medium text-gray-700 text-xs 2xl:text-sm">Weekly Schedule:</span>
-              <div className="mt-2 space-y-1">
-                {DAYS_OF_WEEK.map(day => {
-                  const slots = tour.weeklyHours[day] || [];
-                  return (
-                    <div key={day} className="text-xs 2xl:text-sm">
-                      <span className="inline-block w-20 2xl:w-24 mr-2 font-medium">{day}:</span>
-                      {slots.length === 0 ? (
-                        <span className="text-gray-500">Unavailable</span>
-                      ) : (
-                        slots.map((slot, i) => (
-                          <span key={i} className="text-gray-900 mr-2 2xl:mr-3 inline-block">
-                            {formatTime12Hour(slot.start)} - {formatTime12Hour(slot.end)}
-                          </span>
-                        ))
-                      )}
+              <span className="font-medium text-gray-700 text-xs 2xl:text-sm">Availability Ranges:</span>
+              <div className="mt-2 space-y-4">
+                {(tour.availabilityRanges || []).map((range, rangeIndex) => (
+                  <div key={rangeIndex} className="text-xs 2xl:text-sm">
+                    <p className="font-medium text-gray-900 mb-2">
+                      {range.startDate || 'No start date'} - {range.endDate || 'No end date'}
+                    </p>
+                    <div className="space-y-1">
+                      {DAYS_OF_WEEK.map(day => {
+                        const slots = range.weeklyHours[day] || [];
+                        return (
+                          <div key={`${rangeIndex}-${day}`}>
+                            <span className="inline-block w-20 2xl:w-24 mr-2 font-medium">{day}:</span>
+                            {slots.length === 0 ? (
+                              <span className="text-gray-500">Unavailable</span>
+                            ) : (
+                              slots.map((slot, i) => (
+                                <span key={i} className="text-gray-900 mr-2 2xl:mr-3 inline-block">
+                                  {formatTime12Hour(slot.start)} - {formatTime12Hour(slot.end)}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -680,12 +794,39 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
 
   const handleSaveTour = async (tourToSave: Tour) => {
     try {
+      const availabilityRanges = (tourToSave.availabilityRanges || [])
+        .filter((range) => range.startDate || range.endDate || DAYS_OF_WEEK.some((day) => (range.weeklyHours?.[day] || []).length > 0))
+        .map((range) => ({
+          startDate: range.startDate || '',
+          endDate: range.endDate || '',
+          weeklyHours: normalizeWeeklyHours(range.weeklyHours),
+        }));
+
+      const firstRange = availabilityRanges[0];
+      const sortedRanges = [...availabilityRanges]
+        .filter((range) => range.startDate || range.endDate)
+        .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+
+      const normalizedTour: Tour = {
+        ...tourToSave,
+        availabilityRanges: availabilityRanges.length ? availabilityRanges : [createDefaultAvailabilityRange()],
+        weeklyHours: firstRange?.weeklyHours || {},
+        startDate: sortedRanges[0]?.startDate || firstRange?.startDate || '',
+        endDate: sortedRanges[sortedRanges.length - 1]?.endDate || firstRange?.endDate || '',
+        dateSpecificDays: sortedRanges
+          .filter((range) => range.startDate && range.endDate)
+          .map((range) => ({
+            startDate: range.startDate,
+            endDate: range.endDate,
+          })),
+      };
+
       if (isEditing && tourToSave.tourId) {
-        const { tourId, ...updateData } = tourToSave;
+        const { tourId, ...updateData } = normalizedTour;
         await updateDoc(doc(db, "Tours", tourId), updateData);
         alert('Tour updated!');
       } else {
-        const { tourId, ...newTourData } = tourToSave;
+        const { tourId, ...newTourData } = normalizedTour;
         await addDoc(collection(db, "Tours"), {
           ...newTourData,
           createdAt: new Date().toISOString().split('T')[0],
@@ -934,6 +1075,26 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   // };
 
   const getDateRange = (tour: Tour) => {
+    if (tour.availabilityRanges?.length) {
+      const labels = tour.availabilityRanges
+        .filter((range) => range.startDate || range.endDate)
+        .map((range) => {
+          if (range.startDate && range.endDate) {
+            const start = new Date(range.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const end = new Date(range.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return `${start} - ${end}`;
+          }
+          if (range.startDate) {
+            const start = new Date(range.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return `From ${start}`;
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      if (labels.length > 0) return labels.join(', ');
+    }
+
     if (tour.startDate && tour.endDate) {
       const start = new Date(tour.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const end = new Date(tour.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
