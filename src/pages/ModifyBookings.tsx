@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, query, where, limit } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
 import { ArrowLeft, Calendar, Clock, Search, Loader2, Trash2, Save } from "lucide-react";
+import api from "../../src/api.ts";
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const normalizeWeeklyHours = (weeklyHours?: WeeklyHours): WeeklyHours =>
@@ -28,6 +29,10 @@ const normalizeAvailabilityRanges = (tourLike: Partial<Tour>): AvailabilityRange
 };
 
 type BookingDoc = {
+  bookingId?: string;
+  calendarEventId?: string;
+  startTimeISO?: string;
+  endTimeISO?: string;
   tourId?: string;
   tourType?: string;
   date?: string;
@@ -110,7 +115,10 @@ const ModifyBookingsPage: React.FC = () => {
 
       const data = snap.data() as BookingDoc;
       setBookingId(snap.id);
-      setBooking(data);
+      setBooking({
+        ...data,
+        bookingId: snap.id,
+      });
       setDate(data.date ?? "");
       setTime(data.time ?? data.startTime ?? "");
 
@@ -389,7 +397,7 @@ const ModifyBookingsPage: React.FC = () => {
     setError(null);
     try {
       const bookingRef = doc(db, "Bookings", bookingId);
-      await updateDoc(bookingRef, {
+      const updates = {
         date,
         time: formattedTime,
         startTime: formattedTime,
@@ -398,6 +406,20 @@ const ModifyBookingsPage: React.FC = () => {
         ...(endISO ? { endTimeISO: endISO } : {}),
         modificationReason: reason,
         updatedAt: new Date().toISOString(),
+      };
+      await updateDoc(bookingRef, updates);
+      const reschedulePayload = {
+        ...booking,
+        bookingId,
+        ...updates,
+        ...(booking?.calendarEventId ? { previousCalendarEventId: booking.calendarEventId } : {}),
+        ...(booking?.startTimeISO ? { previousStartTimeISO: booking.startTimeISO } : {}),
+        ...(booking?.endTimeISO ? { previousEndTimeISO: booking.endTimeISO } : {}),
+      };
+      const response = await api.post("/reschedule-booking/", reschedulePayload);
+      setBooking({
+        ...reschedulePayload,
+        ...(response.data?.newCalendarEventId ? { calendarEventId: response.data.newCalendarEventId } : {}),
       });
       setError("Changes saved. Your booking has been updated.");
     } catch (err) {
@@ -415,6 +437,10 @@ const ModifyBookingsPage: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
+      await api.post("/cancel-booking/", {
+        bookingId,
+        calendarEventId: booking?.calendarEventId,
+      });
       await deleteDoc(doc(db, "Bookings", bookingId));
       resetState();
       setError("Booking canceled.");
