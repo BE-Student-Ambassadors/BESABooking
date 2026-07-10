@@ -3,9 +3,7 @@ import { Users, Clock, Edit, ArrowRight } from 'lucide-react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
 import { collection, getDocs } from 'firebase/firestore';
-import { onAuthStateChanged, User } from 'firebase/auth';
 import { db } from '../src/firebase.ts'; 
-import { auth } from '../src/firebase.ts';
 
 import DashboardLayout from './pages/admin/adminDash';
 import DashboardView from './pages/admin/views/dashboard';
@@ -44,15 +42,38 @@ const normalizeAvailabilityRanges = (data: any): AvailabilityRange[] => {
 };
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    let active = true;
+    let unsub = () => {};
+
+    const initAuth = async () => {
+      const [{ onAuthStateChanged }, { auth }] = await Promise.all([
+        import('firebase/auth'),
+        import('../src/firebaseAuth.ts'),
+      ]);
+
+      if (!active) return;
+
+      unsub = onAuthStateChanged(auth, (u) => {
+        if (!active) return;
+        setUser(u);
+        setLoading(false);
+      });
+    };
+
+    initAuth().catch(() => {
+      if (!active) return;
+      setUser(null);
       setLoading(false);
     });
-    return () => unsub();
+
+    return () => {
+      active = false;
+      unsub();
+    };
   }, []);
 
   if (loading) {

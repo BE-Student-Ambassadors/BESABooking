@@ -5,7 +5,7 @@ import {
   updatePassword,
 } from 'firebase/auth';
 import { AlertCircle, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
-import { auth } from '../../../../src/firebase.ts';
+import { auth } from '../../../../src/firebaseAuth.ts';
 
 export default function SettingsView() {
   const [currentEmail, setCurrentEmail] = useState<string>(auth.currentUser?.email || '');
