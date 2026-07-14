@@ -4,8 +4,6 @@ import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
 
-import api  from "../api";
-
 type BookingRecord = {
   tourId?: string;
   date?: string;
@@ -993,14 +991,6 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
       await setDoc(newDocRef, bookingPayload);
       console.log("Booking saved to Firestore with auto-assigned BESAs", bookingPayload);
-
-      // Try to hit the API, but don't fail the booking if this call errors
-      try {
-        await api.post("/book-tour/", bookingPayload);
-        console.log(bookingPayload)
-      } catch (apiError) {
-        console.warn("Booking saved to Firestore, but API call failed:", apiError);
-      }
 
       const confirmationData = {
         id: bookingId,
