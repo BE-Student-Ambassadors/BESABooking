@@ -18,11 +18,11 @@ export async function createBooking(req: Request, res: Response) {
 }
 
 export async function rescheduleBooking(req: Request, res: Response) {
-  const updated = await bookingService.rescheduleBooking(req.params.bookingId, req.body);
+  const updated = await bookingService.rescheduleBooking(req.params.bookingId as string, req.body);
   res.json(updated);
 }
 
 export async function cancelBooking(req: Request, res: Response) {
-  await bookingService.cancelBooking(req.params.bookingId);
+  await bookingService.cancelBooking(req.params.bookingId as string);
   res.status(204).send();
 }
