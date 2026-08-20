@@ -34,8 +34,10 @@ declare global {
         maxAttendeesPerBooking: number; // Maximum number of attendees per booking
         maxBookings: number; // Maximum number of bookings allowed per session
         location: string; // Physical location or 'Online'
+        calendarInviteLocation?: string; // Optional location shown on the calendar invite
         zoomLink: string; // Zoom link if applicable
         autoGenerateZoom: boolean;
+        calendarInviteDetails?: string; // Optional custom details shown on the calendar invite
 
         // Availability
         weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours

@@ -2,6 +2,10 @@
 
 BESABooking is the Baskin Engineering Student Ambassador tour booking system. It includes a public booking flow for students and guests, plus an internal admin dashboard for managing bookings, schedules, tours, BESA staffing, office hours, and related settings.
 
+## Run Locally
+
+- [Local Development Guide](./documentation/LocalDevelopment.md)
+
 ## Main Page
 
 - [Main Page Usage](./documentation/frontend/mainpage/Usage.md)

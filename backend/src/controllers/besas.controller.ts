@@ -20,3 +20,8 @@ export async function updateOfficeHours(req: Request, res: Response) {
   const updated = await besasService.updateOfficeHours(req.params.besaId, req.body);
   res.json(updated);
 }
+
+export async function deleteBesa(req: Request, res: Response) {
+  await besasService.deleteBesa(req.params.besaId);
+  res.status(204).send();
+}

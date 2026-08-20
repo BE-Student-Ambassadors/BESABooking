@@ -127,7 +127,7 @@ function App() {
             description: data.description ?? "",
             duration: data.duration ?? 0,
             durationUnit: data.durationUnit ?? "minutes",
-            maxAttendeesPerBooking: data.maxAttendees ?? 5,
+            maxAttendeesPerBooking: data.maxAttendeesPerBooking ?? data.maxAttendees ?? 5,
             maxBookings: data.maxBookings ?? 3,
             startDate: data.startDate, 
             endDate: data.endDate, 
