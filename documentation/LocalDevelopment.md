@@ -32,7 +32,7 @@ npm run dev
 Verify it is running:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/health
 ```
 
 ## 2. Start the frontend server

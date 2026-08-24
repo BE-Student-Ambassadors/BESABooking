@@ -14,6 +14,8 @@ const dayMapping = {
 } as const;
 
 type NormalizedOfficeHours = Record<string, { available: boolean; timeSlots: Array<{ id: string; start: string; end: string }> }>;
+type NormalizedTour = Record<string, unknown> & { tourId: string };
+type NormalizedBooking = Record<string, unknown> & { bookingId: string; date: string; besas: string[] };
 
 function parseTime12Hour(time12?: string) {
   if (!time12) {
@@ -137,14 +139,14 @@ function normalizeBesa(besa: Record<string, unknown>) {
   };
 }
 
-function normalizeTour(tour: Record<string, unknown>) {
+function normalizeTour(tour: Record<string, unknown>): NormalizedTour {
   return {
     ...tour,
     tourId: typeof tour.tourId === "string" ? tour.tourId : typeof tour.id === "string" ? tour.id : "",
   };
 }
 
-function normalizeBooking(booking: Record<string, unknown>) {
+function normalizeBooking(booking: Record<string, unknown>): NormalizedBooking {
   return {
     ...booking,
     bookingId: typeof booking.bookingId === "string" ? booking.bookingId : "",

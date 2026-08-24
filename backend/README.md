@@ -86,5 +86,24 @@ npm run dev
 6. Verify it is up:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/health
 ```
+
+## Vercel deployment
+
+The repository deploys the frontend and backend together on Vercel. The
+`api/[...path].ts` serverless function forwards every `/api/*` request to the
+Express app, so no separate backend host or start command is required.
+
+1. Import the repository into Vercel with the repository root as the project root.
+2. Use Vercel's default build command (`npm run build`).
+3. Add the following environment variables in the Vercel project settings:
+   - `FRONTEND_ORIGIN` set to the production Vercel URL.
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_CLIENT_EMAIL`
+   - `FIREBASE_PRIVATE_KEY`
+   - `FIREBASE_WEB_API_KEY`
+4. Deploy and verify `https://your-domain/api/health`.
+
+Keep `VITE_API_BASE_URL` unset for this deployment. The frontend will then call
+the API at the same Vercel domain using `/api/...`.

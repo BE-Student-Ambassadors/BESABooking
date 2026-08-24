@@ -21,6 +21,9 @@ export const bookingService = {
 
   async rescheduleBooking(bookingId: string, payload: unknown) {
     const existing = await bookingsRepository.getById(bookingId);
+    if (typeof existing.tourId !== "string") {
+      throw new Error("Booking is missing a tourId.");
+    }
     const tour = await toursRepository.getById(existing.tourId);
     await availabilityService.assertRescheduleAllowed(existing, payload, tour);
     const besas = await assignmentService.assignBesas(payload, tour);

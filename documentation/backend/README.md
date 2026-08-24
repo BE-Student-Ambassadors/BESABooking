@@ -42,7 +42,7 @@ npm run dev
 6. Verify it is reachable:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/health
 ```
 
 Use the links below for details:
