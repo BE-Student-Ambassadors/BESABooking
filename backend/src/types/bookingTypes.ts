@@ -144,7 +144,7 @@ declare global {
         time?: string;
         attendees: number;
         maxAttendees: number;
-        besas: string[];
+        besas: { name: string; email: string }[];
         email?: string;
         firstName?: string;
         lastName?: string;

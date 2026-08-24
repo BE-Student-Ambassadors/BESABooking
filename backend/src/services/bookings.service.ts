@@ -19,8 +19,11 @@ export const bookingService = {
     });
   },
 
-  async rescheduleBooking(bookingId: string, payload: unknown) {
+  async rescheduleBooking(bookingId: string, payload: Partial<BookingData>) {
     const existing = await bookingsRepository.getById(bookingId);
+    if (!existing.tourId) {
+      throw new Error("Booking is missing a tourId; cannot reschedule.");
+    }
     const tour = await toursRepository.getById(existing.tourId);
     await availabilityService.assertRescheduleAllowed(existing, payload, tour);
     const besas = await assignmentService.assignBesas(payload, tour);

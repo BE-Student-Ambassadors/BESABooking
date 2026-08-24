@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft } from "lucide-react";
+import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft, Loader2, Save } from "lucide-react";
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
+import { BookingDoc } from "./ModifyBookings.tsx";
 
 type BookingRecord = {
   tourId?: string;
@@ -11,33 +12,6 @@ type BookingRecord = {
   startTime?: string;
   endTime?: string;
 };
-
-interface BookingData {
-  tourId: string;
-  bookingId: string;
-  tourType: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  time?: string;
-  attendees: number;
-  maxAttendees: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  organization: string;
-  role: string;
-  interests: string[];
-  timeSlot: string;
-  groupSize: number;
-  status: string;
-  leadGuide: string;
-  notes: string;
-  besas: string[];
-  accommodations?: string;
-  largeTourDetails?: string;
-}
 
 const besaSupportsTour = (besa: Pick<BesaData, "supportedTourIds">, tourId?: string) => {
   if (!tourId) return true;
@@ -51,10 +25,12 @@ const besaSupportsTour = (besa: Pick<BesaData, "supportedTourIds">, tourId?: str
 {/* Scheduling Rules: Show Date Ranges */ }
 
 interface DynamicBookingFormProps {
-  onBack: () => void | Promise<void>;
+  onBack?: () => void | Promise<void>;
   preselectedTour?: string;
   tours: Tour[];
   navigate: (path: string, options?: any) => void;
+  preselectedBooking?: BookingDoc;
+  onSubmit?: (updates: Partial<BookingDoc>) => void | Promise<void>;
 }
 
 interface CustomCalendarProps {
@@ -449,18 +425,20 @@ function BookingPage() {
 }
 
 // ---------- Form (child) ----------
-const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
+export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   onBack,
   preselectedTour = "",
   tours,
   navigate,
+  preselectedBooking,
+  onSubmit,
 }) => {
   const [currentSection, setCurrentSection] = useState(1);
   const [selectedTour, setSelectedTour] = useState<string | null>(null);
   // const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Booking Data State
-  const [bookingData, setBookingData] = useState<BookingData>({
+  const initialBook:BookingDoc = preselectedBooking || {
     tourId: preselectedTour || "",
     bookingId: "",
     tourType: "",
@@ -485,7 +463,8 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     besas: [],
     accommodations: "",
     largeTourDetails: "",
-  });
+  }
+  const [bookingData, setBookingData] = useState<BookingDoc>(initialBook);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -610,7 +589,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   };
 
 
-  const updateBookingData = (field: keyof BookingData, value: any) => {
+  const updateBookingData = (field: keyof BookingDoc, value: any) => {
     setBookingData((prev) => ({ ...prev, [field]: value }));
     if (errors[field as string]) {
       setErrors((prev) => ({ ...prev, [field as string]: "" }));
@@ -899,7 +878,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         break;
       case 2:
         if (!bookingData.startTime) newErrors.time = "Please select a time slot";
-        if (bookingData.maxAttendees < 1) newErrors.maxAttendees = "Group size must be at least 1";
+        if (!bookingData.maxAttendees || bookingData.maxAttendees < 1) newErrors.maxAttendees = "Group size must be at least 1";
         break;
       case 3:
         if (!bookingData.firstName) newErrors.firstName = "First name is required";
@@ -936,89 +915,93 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     if (isSubmitting) return;
     if (!validateSection(currentSection)) return;
     setIsSubmitting(true);
-
+    
     try {
-      const selected = tours.find((t) => t.tourId === bookingData.tourId);
-      if (!selected) throw new Error("Selected tour not found.");
+        const selected = tours.find((t) => t.tourId === bookingData.tourId);
+        if (!selected) throw new Error("Selected tour not found.");
+  
+        const durationMins =
+          selected.durationUnit === "hours" || selected.durationUnit === "hour"
+            ? selected.duration * 60
+            : selected.duration;
+  
+        if (!bookingData.date || !bookingData.startTime) {
+          throw new Error("Missing date or time.");
+        }
+  
+        const startLocal = parseLocalDateTime(
+          bookingData.date,
+          bookingData.startTime
+        );
+        const endLocal = addMinutes(startLocal, durationMins);
+  
+        const bookingsRef = collection(db, "Bookings");
+        const newDocRef = doc(bookingsRef);
+        const bookingId = newDocRef.id;
+  
+        const updatedBookingData = {
+          ...bookingData,
+          bookingId,
+          time: bookingData.startTime,
+          endTime: endLocal.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+          startTimeISO: toLocalISO(startLocal),
+          endTimeISO: toLocalISO(endLocal),
+          location: selected.location || "Not specified",
+        };
+  
+        const autoAssignedBesas = getAutoAssignedBesas(
+          updatedBookingData.tourId || "",
+          updatedBookingData.date || "",
+          updatedBookingData.startTime || "",
+          durationMins
+        );
+  
+        let bookingPayload: BookingDoc & { id?: string; createdAt?: string } = {
+          ...updatedBookingData,
+          besas: autoAssignedBesas,
+          accommodations: updatedBookingData.accommodations || "",
+          largeTourDetails: updatedBookingData.largeTourDetails || "",
+        };
 
-      const durationMins =
-        selected.durationUnit === "hours" || selected.durationUnit === "hour"
-          ? selected.duration * 60
-          : selected.duration;
-
-      if (!bookingData.date || !bookingData.startTime) {
-        throw new Error("Missing date or time.");
-      }
-
-      const startLocal = parseLocalDateTime(
-        bookingData.date,
-        bookingData.startTime
-      );
-      const endLocal = addMinutes(startLocal, durationMins);
-
-      const bookingsRef = collection(db, "Bookings");
-      const newDocRef = doc(bookingsRef);
-      const bookingId = newDocRef.id;
-
-      const updatedBookingData = {
-        ...bookingData,
-        bookingId,
-        time: bookingData.startTime,
-        endTime: endLocal.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-        startTimeISO: toLocalISO(startLocal),
-        endTimeISO: toLocalISO(endLocal),
-        location: selected.location || "Not specified",
-      };
-
-      const autoAssignedBesas = getAutoAssignedBesas(
-        updatedBookingData.tourId,
-        updatedBookingData.date,
-        updatedBookingData.startTime,
-        durationMins
-      );
-
-      const bookingPayload = {
-        ...updatedBookingData,
-        besas: autoAssignedBesas,
-        accommodations: updatedBookingData.accommodations || (updatedBookingData as any).accommodations || "",
-        largeTourDetails: updatedBookingData.largeTourDetails || "",
-        id: bookingId,
-        createdAt: new Date().toISOString(),
-      };
-
-      await setDoc(newDocRef, bookingPayload);
-      console.log("Booking saved to Firestore with auto-assigned BESAs", bookingPayload);
-
-      const confirmationData = {
-        id: bookingId,
-        tourTitle: selected.title,
-        date: bookingPayload.date,
-        time: bookingPayload.time || bookingPayload.startTime,
-        startTime: bookingPayload.startTime,
-        endTime: bookingPayload.endTime,
-        duration: selected.duration,
-        durationUnit: selected.durationUnit,
-        groupSize: bookingPayload.maxAttendees,
-        firstName: bookingPayload.firstName,
-        lastName: bookingPayload.lastName,
-        email: bookingPayload.email,
-        phone: bookingPayload.phone,
-        organization: bookingPayload.organization,
-        role: bookingPayload.role,
-        accommodations: bookingPayload.accommodations,
-        location: selected.location,
-        zoomLink: selected.zoomLink,
-        calendarEventLink: "",
-        createdAt: new Date().toISOString(),
-      };
-
-      navigate("/booking-confirmation", {
-        state: { bookingData: confirmationData },
-        replace: true,
-      });
+        if (onSubmit) {
+          await onSubmit(bookingPayload)
+        } else {
+          bookingPayload.id = bookingId
+          bookingPayload.createdAt = new Date().toISOString()
+          await setDoc(newDocRef, bookingPayload);
+          console.log("Booking saved to Firestore with auto-assigned BESAs", bookingPayload);
+    
+          const confirmationData = {
+            id: bookingId,
+            tourTitle: selected.title,
+            date: bookingPayload.date,
+            time: bookingPayload.time || bookingPayload.startTime,
+            startTime: bookingPayload.startTime,
+            endTime: bookingPayload.endTime,
+            duration: selected.duration,
+            durationUnit: selected.durationUnit,
+            groupSize: bookingPayload.maxAttendees,
+            firstName: bookingPayload.firstName,
+            lastName: bookingPayload.lastName,
+            email: bookingPayload.email,
+            phone: bookingPayload.phone,
+            organization: bookingPayload.organization,
+            role: bookingPayload.role,
+            accommodations: bookingPayload.accommodations,
+            location: selected.location,
+            zoomLink: selected.zoomLink,
+            calendarEventLink: "",
+            createdAt: new Date().toISOString(),
+          };
+    
+          navigate("/booking-confirmation", {
+            state: { bookingData: confirmationData },
+            replace: true,
+          });
+        }
     } catch (error) {
       console.error("Error during submission:", error);
       alert("Failed to submit booking. Please try again.");
@@ -1062,7 +1045,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
                 >
                   {section.id < currentSection ? <Check className="w-6 h-6" /> : section.id}
                 </div>
-                <div className="text-center w-32">
+                <div className="text-center max-w-32">
                   <p
                     className={`text-sm font-medium ${section.id <= currentSection ? "text-blue-600" : "text-gray-500"
                       }`}
@@ -1329,7 +1312,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         <div>
           <label className="block text-lg font-semibold text-gray-900 mb-4">Preferred Date</label>
           <CustomCalendar
-            selectedDate={bookingData.date}
+            selectedDate={bookingData.date ?? ""}
             onDateSelect={(date) => {
               const nextDate = bookingData.date === date ? "" : date;
 
@@ -1897,6 +1880,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
+      { onBack ? 
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1914,7 +1898,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
           </div>
         </div>
       </div>
-
+      : <></>}
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8">
@@ -1948,7 +1932,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
                 Continue
                 <ArrowRight className="w-4 h-4" />
               </button>
-            ) : (
+            ) : onBack ? (
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
@@ -1960,7 +1944,14 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
                 <Check className="w-4 h-4" />
                 {isSubmitting ? "Booking..." : "Complete Booking"}
               </button>
-            )}
+            ) : (<button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition w-full sm:w-auto"
+                >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span className="ml-2">{isSubmitting ? "Saving..." : "Submit Changes"}</span>
+                </button>)}
           </div>
         </div>
       </div>

@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Calendar, Clock, Search, Loader2, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, Search, Loader2, Trash2 } from "lucide-react";
 import api from "../api.ts";
+import { DynamicBookingForm } from "./DynamicBookingFlow.tsx";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase.ts";
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const normalizeWeeklyHours = (weeklyHours?: WeeklyHours): WeeklyHours =>
@@ -26,7 +29,7 @@ const normalizeAvailabilityRanges = (tourLike: Partial<Tour>): AvailabilityRange
   }];
 };
 
-type BookingDoc = {
+export type BookingDoc = {
   bookingId?: string;
   calendarEventId?: string;
   startTimeISO?: string;
@@ -43,6 +46,20 @@ type BookingDoc = {
   email?: string;
   phone?: string;
   status?: string;
+  attendees: number;
+  organization: string;
+  role: string;
+  interests: string[]
+  timeSlot: string;
+  groupSize: number;
+  leadGuide: string;
+  notes: string;
+  besas: {
+        name: string;
+        email: string;
+    }[];
+  accommodations: string;
+  largeTourDetails: string;
 };
 
 const ModifyBookingsPage: React.FC = () => {
@@ -56,8 +73,72 @@ const ModifyBookingsPage: React.FC = () => {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [tour, setTour] = useState<Tour | null>(null);
+  const [tourId, setTourId] = useState("")
   const [reason, setReason] = useState("");
   const [lastName, setLastName] = useState("");
+  const [tours, setTours] = useState<Tour[]>([])
+
+  useEffect(() => {
+    const fetchTours = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "Tours"));
+        const toursData: Tour[] = querySnapshot.docs.map((d) => {
+          const data: any = d.data();
+          return {
+            tourId: d.id, // ← Changed from 'id' to 'tourId'
+            title: data.title ?? "",
+            description: data.description ?? "",
+            duration: data.duration ?? 0,
+            durationUnit: data.durationUnit ?? "minutes",
+            maxAttendeesPerBooking: data.maxAttendees ?? 5,
+            maxBookings: data.maxBookings ?? 3,
+            startDate: data.startDate, // ← Add this
+            endDate: data.endDate, // ← Add this
+            location: data.location ?? "",
+            zoomLink: data.zoomLink ?? "",
+            autoGenerateZoom: data.autoGenerateZoom ?? false,
+            weeklyHours: normalizeWeeklyHours(data.weeklyHours),
+            availabilityRanges: normalizeAvailabilityRanges(data),
+            dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
+            dateSpecificDays: data.dateSpecificDays ?? [], // ← Add this
+            frequency: data.frequency ?? 1,
+            frequencyUnit: data.frequencyUnit ?? "hours",
+            minNotice: data.minNotice ?? 0,
+            minNoticeUnit: data.minNoticeUnit ?? "hours",
+            maxNotice: data.maxNotice ?? 1,
+            maxNoticeUnit: data.maxNoticeUnit ?? "days",
+            cancellationPolicy: data.cancellationPolicy ?? "",
+            reschedulingPolicy: data.reschedulingPolicy ?? "",
+            intakeForm: data.intakeForm ?? {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: false,
+              attendeeCount: true,
+              majorsInterested: false,
+              largeTourDetailsEnabled: false,
+              largeTourDetailsLabel: 'Please share details about your large in-person group (size, needs, schedule).',
+              customQuestions: [],
+            },
+            reminderEmails: data.reminderEmails ?? [],
+            sessionInstructions: data.sessionInstructions ?? "",
+            published: data.published ?? false,
+            createdAt: data.createdAt ?? "",
+            upcomingBookings: data.upcomingBookings ?? 0,
+            totalBookings: data.totalBookings ?? 0,
+          } as Tour;
+        });
+        setTours(toursData);
+      } catch (error) {
+        console.error("Error fetching tours:", error);
+      }
+    };
+    fetchTours();
+  }, []);
+
+  useEffect(() => {
+    console.log(tourId, tour?.tourId)
+  }, [tourId])
 
   const resetState = () => {
     setBooking(null);
@@ -89,6 +170,7 @@ const ModifyBookingsPage: React.FC = () => {
       const data = response.query
       const booking = data.booking as BookingDoc
       setTour({...data.tour as Tour})
+      setTourId(data.tour_id ?? "")
       setBookingId(data?.booking_id || null)
       setBooking(booking)
       setDate(booking.date || "")
@@ -102,11 +184,11 @@ const ModifyBookingsPage: React.FC = () => {
     }
   };
 
-  const handleSave = async () => {
-    if (!bookingId || !date || !time) {
-      setError("Please pick a new date and time.");
-      return;
-    }
+  const handleSave = async (updates: Partial<BookingDoc>) => {
+    // if (!bookingId || !date || !time) {
+    //   setError("Please pick a new date and time.");
+    //   return;
+    // }
 
     // convert 24h input ("14:00") to "2:00 PM" to stay consistent with stored bookings
     const to12Hour = (value: string) => {
@@ -333,16 +415,16 @@ const ModifyBookingsPage: React.FC = () => {
     setError(null);
 
     try {
-      const updates = {
-        date,
-        time: formattedTime,
-        startTime: formattedTime,
-        ...(computedEndTime ? { endTime: computedEndTime } : {}),
-        ...(startISO ? { startTimeISO: startISO } : {}),
-        ...(endISO ? { endTimeISO: endISO } : {}),
-        modificationReason: reason,
-        updatedAt: new Date().toISOString(),
-      };
+      // const updates = {
+      //   date,
+      //   time: formattedTime,
+      //   startTime: formattedTime,
+      //   ...(computedEndTime ? { endTime: computedEndTime } : {}),
+      //   ...(startISO ? { startTimeISO: startISO } : {}),
+      //   ...(endISO ? { endTimeISO: endISO } : {}),
+      //   modificationReason: reason,
+      //   updatedAt: new Date().toISOString(),
+      // };
       const response = await api.patch("/api/bookings/" + bookingId + "/reschedule", updates)
       
       // Prevent overlapping with any other tour at the same time
@@ -355,7 +437,7 @@ const ModifyBookingsPage: React.FC = () => {
         ...booking,
         bookingId,
         ...updates,
-      });
+      } as BookingDoc);
       setError("Changes saved. Your booking has been updated.");
     } catch (err) {
       console.error("Save error:", err);
@@ -430,7 +512,7 @@ const ModifyBookingsPage: React.FC = () => {
             </div>
           </div>
 
-          {booking && (
+          {(booking && tour) && (
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 rounded-lg border">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">{booking.tourType || "Tour"}</h3>
@@ -443,20 +525,22 @@ const ModifyBookingsPage: React.FC = () => {
                 <p className="text-sm text-gray-700">Email: {booking.email}</p>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <label className="text-sm text-gray-800 flex flex-col gap-1">
+              <div className="">
+                <label className="text-sm text-gray-800">
                   New Date
                   <div className="relative">
-                    <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                    {/* <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                     <input
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
                       className="w-full rounded-lg border pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    /> */}
+                    {/* Replacing with calendar */}
+                    <DynamicBookingForm tours={[tour]} preselectedTour={tourId} navigate={navigate} preselectedBooking={booking} onSubmit={handleSave}/>
                   </div>
                 </label>
-                <label className="text-sm text-gray-800 flex flex-col gap-1">
+                {/* <label className="text-sm text-gray-800">
                   New Time
                   <div className="relative">
                     <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
@@ -467,7 +551,7 @@ const ModifyBookingsPage: React.FC = () => {
                       className="w-full rounded-lg border pl-9 pr-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                </label>
+                </label> */}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-800">
@@ -483,14 +567,6 @@ const ModifyBookingsPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition w-full sm:w-auto"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span className="ml-2">{saving ? "Saving..." : "Submit Changes"}</span>
-                </button>
                 <button
                   onClick={handleCancel}
                   disabled={saving || !bookingId}

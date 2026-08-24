@@ -10,16 +10,16 @@ export const bookingsRepository = {
     if (!query?.id && !query?.lastName) return {query: null, message: "Need at least lastName or id"}
     const bookingRef = db.collection("Bookings")
     //ensures that the tour exists within the database
-    async function validate(tourId: string): Promise<Tour | null> {
+    async function validate(tourId: string): Promise<[Tour, string] | null> {
       const tourRef = await db.collection("Tours").doc(tourId).get()
       if (tourRef.exists) {
-        return tourRef.data() as Tour;
+        return [tourRef.data() as Tour, tourRef.id];
       } else {
         return null;
       }
     }
 
-    let newQuery: {booking: BookingData, booking_id: string, tour?: Tour} | null = null
+    let newQuery: {booking: BookingData, booking_id: string, tour?: Tour, tour_id?: string} | null = null
     let message: string = ""
 
     if (query.id) {
@@ -58,7 +58,9 @@ export const bookingsRepository = {
     if (newQuery?.booking.tourId) {
       const isValid = await validate(newQuery.booking.tourId)
       if (isValid) {
-        newQuery.tour = isValid
+        const [tour, id] = isValid
+        newQuery.tour = {...tour, tourId: id}
+        newQuery.tour_id = id
         return {
           query: newQuery,
           message: message
@@ -82,7 +84,7 @@ export const bookingsRepository = {
     return {
       id: snapshot.id,
       ...snapshot.data(),
-    } as Record<string, unknown>;
+    } as Partial<BookingData> & { id: string };
   },
 
   async create(payload: unknown) {
@@ -92,7 +94,7 @@ export const bookingsRepository = {
     };
   },
 
-  async reschedule(bookingId: string, payload: BookingData, besas: unknown) {
+  async reschedule(bookingId: string, payload: Partial<BookingData>, besas: unknown) {
     const toMinutes = (t: string) => {
       if (!t || !t.includes(":")) return -1;
       const [h, mPart] = t.split(":");
