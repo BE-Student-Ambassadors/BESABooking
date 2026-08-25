@@ -57,6 +57,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     duration: 60,
     durationUnit: 'minutes',
     maxAttendeesPerBooking: 5,
+    bookingNotice: '',
     maxBookings: 3,
     location: '',
     zoomLink: '',
@@ -249,6 +250,18 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                 onChange={(e) => updateTour({ maxAttendeesPerBooking: parseInt(e.target.value) || 1 })}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Booking Notice</label>
+            <textarea
+              rows={3}
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
+              placeholder="For example: One booking per person. If your party has multiple people, please make a separate booking for each person."
+              value={tour.bookingNotice || ''}
+              onChange={(e) => updateTour({ bookingNotice: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-gray-500">Shown above the date calendar only when this tour is selected.</p>
           </div>
         </div>
       );

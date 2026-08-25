@@ -466,6 +466,7 @@ function BookingPage() {
             duration: data.duration ?? 0,
             durationUnit: data.durationUnit ?? "minutes",
             maxAttendeesPerBooking: data.maxAttendeesPerBooking ?? data.maxAttendees ?? 5,
+            bookingNotice: data.bookingNotice ?? "",
             maxBookings: data.maxBookings ?? 3,
             startDate: data.startDate, // ← Add this
             endDate: data.endDate, // ← Add this
@@ -1400,6 +1401,13 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
             <AlertCircle className="w-4 w-4" />
             {errors.tourType}
           </p>
+        )}
+
+        {selectedTourData?.bookingNotice?.trim() && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+            <p className="font-semibold">Before you book</p>
+            <p className="mt-1 whitespace-pre-line leading-6">{selectedTourData.bookingNotice.trim()}</p>
+          </div>
         )}
 
         <div>
