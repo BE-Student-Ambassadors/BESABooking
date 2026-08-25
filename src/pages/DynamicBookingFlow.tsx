@@ -375,6 +375,79 @@ function toLocalISO(dt: Date): string {
   );
 }
 
+function formatDescriptionInline(text: string) {
+  return text.split(/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => {
+    if (part.startsWith('***') && part.endsWith('***')) {
+      return <strong key={index}>{part.slice(3, -3)}</strong>;
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
+function FormattedTourDescription({
+  description,
+  title,
+  compact = false,
+}: {
+  description: string;
+  title: string;
+  compact?: boolean;
+}) {
+  const normalizedDescription = description
+    .replace(/\r\n?/g, '\n')
+    // A standalone backslash is commonly pasted as a manual paragraph separator.
+    .replace(/(?:^|\n)\s*\\\s*(?=\n|$)/g, '\n');
+  const blocks = normalizedDescription.split(/\n\s*\n+/).filter((block) => block.trim());
+
+  return (
+    <div
+      className={`mb-4 space-y-3 overflow-y-auto pr-3 text-sm leading-relaxed text-gray-600 ${compact ? 'max-h-32' : 'max-h-48'}`}
+      tabIndex={0}
+      aria-label={`${title} description`}
+    >
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split('\n').filter((line) => line.trim());
+
+        return (
+          <div key={blockIndex} className="space-y-1">
+            {lines.map((line, lineIndex) => {
+              const headingMatch = line.match(/^\*\*\*(.+?)\*\*\*\s*(.*)$/);
+              const bulletMatch = line.match(/^(\s*)[-*]\s+(.+)$/);
+
+              if (headingMatch) {
+                return (
+                  <div key={lineIndex} className="space-y-1">
+                    <h4 className="text-base font-bold leading-snug text-indigo-700">{headingMatch[1]}</h4>
+                    {headingMatch[2] && <p>{formatDescriptionInline(headingMatch[2])}</p>}
+                  </div>
+                );
+              }
+
+              if (bulletMatch) {
+                const indent = Math.floor(bulletMatch[1].length / 2);
+                return (
+                  <div key={lineIndex} className="flex gap-2" style={{ marginLeft: `${indent * 1.25}rem` }}>
+                    <span aria-hidden="true">•</span>
+                    <span>{formatDescriptionInline(bulletMatch[2])}</span>
+                  </div>
+                );
+              }
+
+              return <p key={lineIndex}>{formatDescriptionInline(line)}</p>;
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function BookingPage() {
   const [tours, setTours] = useState<Tour[]>([]);
   const navigate = useNavigate();
@@ -1267,7 +1340,10 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-indigo-600 mb-2">{selectedTourData.title}</h3>
-                      <p className="text-gray-600 text-sm mb-4">{selectedTourData.description}</p>
+                      <FormattedTourDescription
+                        description={selectedTourData.description}
+                        title={selectedTourData.title}
+                      />
                       <div className="text-sm text-gray-700 space-y-1">
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
@@ -1296,7 +1372,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
               tours.map((tour) => (
                 <div key={tour.tourId} className="tour-card">
                   <h3 className="text-lg font-semibold text-indigo-600 mb-2">{tour.title}</h3>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-3">{tour.description}</p>
+                  <FormattedTourDescription description={tour.description} title={tour.title} compact />
                   <div className="text-sm text-gray-700 space-y-1">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />

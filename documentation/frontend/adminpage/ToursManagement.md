@@ -13,7 +13,7 @@ Admin UI for creating, editing, ordering, and globally blocking tour availabilit
   - Persists to Firestore:
     - New tour: `addDoc` to `Tours` with metadata.
     - Existing tour: `updateDoc` on `Tours/{tourId}`.
-  - Manages granular fields: weekly hours, date-specific blocks, recurrence, notice windows, intake custom questions, reminder emails.
+  - Manages granular fields: weekly hours, date-specific blocks, recurrence, notice windows, intake custom questions, reminder emails, and the Google Calendar destination.
   - Validates minimal fields per step (`canProceed`).
 
 - `ToursDashboard`
@@ -35,10 +35,12 @@ Admin UI for creating, editing, ordering, and globally blocking tour availabilit
 - Live sync: `onSnapshot` → `setTours` (typed as `Dispatch<SetStateAction<Tour[]>>`).
 - Reordering: local swap → optimistic `setTours` → `updateDoc` for each tour’s `displayOrder`.
 - Date-specific logic: `dateSpecificBlockDays` items optionally include `appliesToAllTours`; universal sidebar keeps cross-tour view consistent.
+- Calendar destination: `googleCalendarId` is set in the Availability step. The booking Calendar Function reads this value from the saved tour, not from the browser booking payload.
 
 ## Extending Safely
 
 - Add new tour fields: update `Tour` type (`src/types/global.d.ts`), extend form state defaults, and include fields in Firestore `addDoc`/`updateDoc`.
+- Calendar routing: enter `primary` or a Google Calendar ID. The Calendar OAuth account configured in `besabookingapi` must have permission to create events in that calendar.
 - New filters or sorting: adjust `filteredTours` and `sortByDisplayOrder`.
 - Validation: enhance `canProceed` or add per-step inline messages.
 - Bulk operations: reuse `setTours` functional updates to avoid stale closures.
