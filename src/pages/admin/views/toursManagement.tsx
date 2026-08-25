@@ -63,6 +63,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     autoGenerateZoom: false,
     weeklyHours: {},
     availabilityRanges: [createDefaultAvailabilityRange()],
+    googleCalendarId: '',
     dateSpecificBlockDays: [],
     dateSpecificDays: [],
     frequency: 60,
@@ -413,6 +414,31 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             </div>
           </div>
         ))}
+      </div>
+    </div>
+
+    {/* Google Calendar Destination */}
+    <div className="border-t pt-4 2xl:pt-6">
+      <h3 className="text-base 2xl:text-lg font-medium text-gray-900 mb-3 2xl:mb-4">Google Calendar</h3>
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 2xl:p-4">
+        <label htmlFor="google-calendar-id" className="block text-sm font-medium text-gray-700 mb-2">
+          Save bookings to
+        </label>
+        <input
+          id="google-calendar-id"
+          list="google-calendar-options"
+          type="text"
+          className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+          placeholder="primary or a Google Calendar ID"
+          value={tour.googleCalendarId || ''}
+          onChange={(e) => updateTour({ googleCalendarId: e.target.value.trim() })}
+        />
+        <datalist id="google-calendar-options">
+          <option value="primary">Primary calendar</option>
+        </datalist>
+        <p className="text-xs text-gray-500 mt-2">
+          Enter <code>primary</code> for the connected account's main calendar, or paste a calendar ID such as an email address.
+        </p>
       </div>
     </div>
 

@@ -40,6 +40,7 @@ declare global {
         // Availability
         weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours
         availabilityRanges?: AvailabilityRange[]; // Date ranges with their own recurring hours
+        googleCalendarId?: string; // Google Calendar destination for bookings from this tour
         // Example: { monday: [{ start: '09:00', end: '17:00' }], tuesday: [...] }  
 
         // Date-Specific Availability
