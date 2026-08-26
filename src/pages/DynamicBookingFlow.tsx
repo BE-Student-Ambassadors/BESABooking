@@ -467,6 +467,7 @@ function BookingPage() {
             durationUnit: data.durationUnit ?? "minutes",
             maxAttendeesPerBooking: data.maxAttendeesPerBooking ?? data.maxAttendees ?? 5,
             bookingNotice: data.bookingNotice ?? "",
+            bannerImageUrl: data.bannerImageUrl ?? "",
             maxBookings: data.maxBookings ?? 3,
             startDate: data.startDate, // ← Add this
             endDate: data.endDate, // ← Add this
@@ -1331,13 +1332,21 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
     return (
       <div className="space-y-6">
-
         <div>
           <div className="grid gap-6">
             {selectedTour ? (
               // Show only the selected tour
               selectedTourData && (
                 <div className="tour-card selected">
+                  {selectedTourData.bannerImageUrl?.trim() && (
+                    <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-sm">
+                      <img
+                        src={selectedTourData.bannerImageUrl}
+                        alt={`${selectedTourData.title} banner`}
+                        className="block h-auto w-full"
+                      />
+                    </div>
+                  )}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-indigo-600 mb-2">{selectedTourData.title}</h3>

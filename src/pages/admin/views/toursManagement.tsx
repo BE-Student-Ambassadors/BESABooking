@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Dispatch, SetStateAction } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
+import { tourBannerOptions } from "../../../data/tourBannerOptions";
 
 {/* Create/Edit Tour Button adaptable for small screen */}
 {/* Allow to move order of tours (group first, etc) */}
@@ -58,6 +59,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     durationUnit: 'minutes',
     maxAttendeesPerBooking: 5,
     bookingNotice: '',
+    bannerImageUrl: '',
     maxBookings: 3,
     location: '',
     zoomLink: '',
@@ -262,6 +264,33 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               onChange={(e) => updateTour({ bookingNotice: e.target.value })}
             />
             <p className="mt-1 text-xs text-gray-500">Shown above the date calendar only when this tour is selected.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tour Banner</label>
+            <select
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+              value={tourBannerOptions.some((option) => option.url === tour.bannerImageUrl) ? tour.bannerImageUrl : ''}
+              onChange={(e) => updateTour({ bannerImageUrl: e.target.value })}
+            >
+              <option value="">Choose an image from the banner library</option>
+              {tourBannerOptions.map((option) => (
+                <option key={option.url} value={option.url}>{option.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Repository banners are stored in `public/tour-banners` and listed in `src/data/tourBannerOptions.ts`.</p>
+            {tour.bannerImageUrl && (
+              <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                <img src={tour.bannerImageUrl} alt="Tour banner preview" className="h-auto w-full" />
+                <button
+                  type="button"
+                  onClick={() => updateTour({ bannerImageUrl: '' })}
+                  className="m-3 text-sm font-medium text-red-600 hover:text-red-700"
+                >
+                  Remove banner
+                </button>
+              </div>
+            )}
           </div>
         </div>
       );

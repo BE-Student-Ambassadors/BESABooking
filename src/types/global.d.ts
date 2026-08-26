@@ -33,6 +33,7 @@ declare global {
         durationUnit: 'minutes' | 'hours' | 'hour'; // Unit for duration
         maxAttendeesPerBooking: number; // Maximum number of attendees per booking
         bookingNotice?: string; // Tour-specific message shown before selecting a booking date
+        bannerImageUrl?: string; // Optional banner shown when this tour is selected
         maxBookings: number; // Maximum number of bookings allowed per session
         location: string; // Physical location or 'Online'
         zoomLink: string; // Zoom link if applicable
