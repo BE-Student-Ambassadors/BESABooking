@@ -2,6 +2,7 @@ import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin
 import { getFirestore } from "firebase-admin/firestore";
 import { env } from "./env.js";
 
+
 const app =
   getApps()[0] ??
   initializeApp({

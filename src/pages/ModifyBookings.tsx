@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, query, where, limit } from "firebase/firestore";
-import { db } from "../../src/firebase.ts";
 import { ArrowLeft, Calendar, Clock, Search, Loader2, Trash2, Save } from "lucide-react";
+import api from "../api.ts";
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const normalizeWeeklyHours = (weeklyHours?: WeeklyHours): WeeklyHours =>
@@ -82,62 +81,19 @@ const ModifyBookingsPage: React.FC = () => {
     setLoading(true);
     resetState();
     try {
-      const bookingsCol = collection(db, "Bookings");
+      //actual part of lookup
+      const response = await( await api.get("/api/bookings/lookup", {params: {id: idInput, lastName: lastInput}})).data
+      console.log(response)
+      if (response?.message.length > 0) setError(response.message)
+      if (!response?.query) return 
+      const data = response.query
+      const booking = data.booking as BookingDoc
+      setTour({...data.tour as Tour})
+      setBookingId(data?.booking_id || null)
+      setBooking(booking)
+      setDate(booking.date || "")
+      setTime(booking.time || booking.startTime || "")
 
-      // 1) Try direct doc id lookup
-      let snap = idInput ? await getDoc(doc(bookingsCol, idInput)) : { exists: () => false } as any;
-
-      // 2) If not found, try last name equality (case-insensitive via lowercasing)
-      if (!snap.exists()) {
-        const q = query(
-          bookingsCol,
-          where("lastName", "==", lastInput || idInput),
-          limit(5)
-        );
-        const qSnap = await getDocs(q);
-        if (!qSnap.empty) {
-          // If multiple, pick the most recent createdAt if available
-          const sorted = qSnap.docs.sort((a, b) => {
-            const aTs = (a.data() as any).createdAt || "";
-            const bTs = (b.data() as any).createdAt || "";
-            return bTs.localeCompare(aTs);
-          });
-          snap = sorted[0];
-          setError(qSnap.size > 1 ? "Found multiple bookings; showing the most recent. Consider using the booking ID for precision." : null);
-        }
-      }
-
-      if (!snap.exists()) {
-        setError("No booking found for that ID or last name.");
-        return;
-      }
-
-      const data = snap.data() as BookingDoc;
-      setBookingId(snap.id);
-      setBooking({
-        ...data,
-        bookingId: snap.id,
-      });
-      setDate(data.date ?? "");
-      setTime(data.time ?? data.startTime ?? "");
-
-      // fetch associated tour for validation
-      if (data.tourId) {
-        try {
-          const tourSnap = await getDoc(doc(db, "Tours", data.tourId as string));
-          if (tourSnap.exists()) {
-            const tourData = tourSnap.data() as any;
-            setTour({
-              tourId: tourSnap.id,
-              ...tourData,
-              weeklyHours: tourData.weeklyHours ?? {},
-              availabilityRanges: normalizeAvailabilityRanges(tourData),
-            } as Tour);
-          }
-        } catch (e) {
-          console.warn("Could not load tour for validation", e);
-        }
-      }
     } catch (err) {
       console.error("Lookup error:", err);
       setError("Could not fetch booking. Please try again.");
@@ -254,18 +210,6 @@ const ModifyBookingsPage: React.FC = () => {
       return false;
     };
 
-    // Check for conflicting bookings on the same date/time (any tour)
-    const hasConflict = async (dateVal: string, timeLabel: string, currentId: string | null) => {
-      const bookingsCol = collection(db, "Bookings");
-      const qSnap = await getDocs(query(bookingsCol, where("date", "==", dateVal)));
-      return qSnap.docs.some((d) => {
-        if (d.id === currentId) return false;
-        const data = d.data() as BookingDoc;
-        const bookedTime = data.time || data.startTime;
-        if (!bookedTime) return false;
-        return toMinutes(bookedTime) === toMinutes(timeLabel);
-      });
-    };
 
     const generateSlots = (start: string, end: string, durationMins: number, freqMins: number) => {
       const startM = toMinutes(start);
@@ -384,18 +328,11 @@ const ModifyBookingsPage: React.FC = () => {
         return;
       }
     }
-
-    // Prevent overlapping with any other tour at the same time
-    const conflict = await hasConflict(date, formattedTime, bookingId);
-    if (conflict) {
-      setError("That time is already booked for another tour. Please choose a different time.");
-      return;
-    }
-
+    
     setSaving(true);
     setError(null);
+
     try {
-      const bookingRef = doc(db, "Bookings", bookingId);
       const updates = {
         date,
         time: formattedTime,
@@ -406,7 +343,14 @@ const ModifyBookingsPage: React.FC = () => {
         modificationReason: reason,
         updatedAt: new Date().toISOString(),
       };
-      await updateDoc(bookingRef, updates);
+      const response = await api.patch("/api/bookings/" + bookingId + "/reschedule", updates)
+      
+      // Prevent overlapping with any other tour at the same time
+      if (!response.data?.payload) {
+        setError(response.data?.message)
+        return
+      }
+
       setBooking({
         ...booking,
         bookingId,
@@ -428,7 +372,7 @@ const ModifyBookingsPage: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
-      await deleteDoc(doc(db, "Bookings", bookingId));
+      await api.delete("api/bookings/" + bookingId);
       resetState();
       setError("Booking canceled.");
     } catch (err) {
