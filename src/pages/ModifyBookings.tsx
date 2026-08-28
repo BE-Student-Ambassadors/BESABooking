@@ -79,27 +79,40 @@ const ModifyBookingsPage: React.FC = () => {
     }
     setError(null);
     setLoading(true);
-    resetState();
+    setBooking(null);
+    setBookingId(null);
+    setDate("");
+    setTime("");
+    setTour(null);
+    setReason("");
     try {
-      //actual part of lookup
       const response = await (await api.get("/api/bookings/lookup", {
         params: { id: idInput, lastName: lastInput },
       })).data;
       const message = typeof response?.message === "string" ? response.message : "";
 
-      if (message) setError(message);
-      if (!response?.query) return;
-      const data = response.query
+      if (!response || typeof response !== "object") {
+        console.error("Unexpected lookup response:", response);
+        setError("The booking service returned an unexpected response. Please try again.");
+        return;
+      }
+
+      if (!response.query) {
+        setError(message || "No booking was found for that name or confirmation number.");
+        return;
+      }
+
+      const data = response.query;
       if (!data.booking || !data.tour) {
         setError("The booking record is incomplete. Please try again or contact an administrator.");
         return;
       }
-      const booking = data.booking as BookingDoc
-      setTour({...data.tour as Tour})
-      setBookingId(data?.booking_id || null)
-      setBooking(booking)
-      setDate(booking.date || "")
-      setTime(booking.time || booking.startTime || "")
+      const booking = data.booking as BookingDoc;
+      setTour({ ...data.tour as Tour });
+      setBookingId(data.booking_id || null);
+      setBooking(booking);
+      setDate(booking.date || "");
+      setTime(booking.time || booking.startTime || "");
 
     } catch (err) {
       console.error("Lookup error:", err);
