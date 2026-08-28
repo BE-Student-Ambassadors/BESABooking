@@ -82,11 +82,18 @@ const ModifyBookingsPage: React.FC = () => {
     resetState();
     try {
       //actual part of lookup
-      const response = await( await api.get("/api/bookings/lookup", {params: {id: idInput, lastName: lastInput}})).data
-      console.log(response)
-      if (response?.message.length > 0) setError(response.message)
-      if (!response?.query) return 
+      const response = await (await api.get("/api/bookings/lookup", {
+        params: { id: idInput, lastName: lastInput },
+      })).data;
+      const message = typeof response?.message === "string" ? response.message : "";
+
+      if (message) setError(message);
+      if (!response?.query) return;
       const data = response.query
+      if (!data.booking || !data.tour) {
+        setError("The booking record is incomplete. Please try again or contact an administrator.");
+        return;
+      }
       const booking = data.booking as BookingDoc
       setTour({...data.tour as Tour})
       setBookingId(data?.booking_id || null)
