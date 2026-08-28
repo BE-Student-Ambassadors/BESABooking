@@ -2,6 +2,31 @@
 
 BESABooking is the Baskin Engineering Student Ambassador tour booking system. It includes a public booking flow for students and guests, plus an internal admin dashboard for managing bookings, schedules, tours, BESA staffing, office hours, and related settings.
 
+## Running locally
+
+Install dependencies from this directory, then run the frontend and API in separate terminals:
+
+```bash
+npm install
+npm run dev
+```
+
+```bash
+npm run dev:api
+```
+
+The Vite development server proxies `/api/*` requests to `http://127.0.0.1:8000`. Copy `backend/.env.example` to `backend/.env` and provide the Firebase Admin credentials before starting the local API.
+
+## Deploying to Vercel
+
+Vercel deploys `api/[...path].ts` as one Node.js serverless function. It runs the existing Express app for every `/api/*` request, while the SPA rewrite serves frontend routes.
+
+In Vercel project settings, set the Root Directory to `BESABooking` if this repository is deployed from its parent directory. Use the Vite framework preset, build command `npm run build`, and output directory `dist`.
+
+Add `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, and `FRONTEND_ORIGIN` as environment variables. Set `FRONTEND_ORIGIN` to the production frontend URL. `FIREBASE_PRIVATE_KEY` accepts the full key with either literal line breaks or escaped `\\n` line breaks.
+
+After deployment, verify the backend at `/api/health` on the deployed domain.
+
 ## Main Page
 
 - [Main Page Usage](./documentation/frontend/mainpage/Usage.md)

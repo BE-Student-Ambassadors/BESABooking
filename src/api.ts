@@ -1,8 +1,9 @@
 import axios from 'axios'
 
 const api = axios.create({
-    // baseURL: 'https://besabookingapi.vercel.app/'
-    baseURL: "http://127.0.0.1:8000"
+    // Production uses the Vercel function on this same domain. Set this only
+    // when intentionally using a separately hosted API.
+    baseURL: import.meta.env.VITE_API_BASE_URL ?? ""
 })
 
 

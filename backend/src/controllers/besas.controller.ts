@@ -12,11 +12,11 @@ export async function createBesa(req: Request, res: Response) {
 }
 
 export async function updateBesa(req: Request, res: Response) {
-  const updated = await besasService.updateBesa(req.params.besaId, req.body);
+  const updated = await besasService.updateBesa(req.params.besaId as string, req.body);
   res.json(updated);
 }
 
 export async function updateOfficeHours(req: Request, res: Response) {
-  const updated = await besasService.updateOfficeHours(req.params.besaId, req.body);
+  const updated = await besasService.updateOfficeHours(req.params.besaId as string, req.body);
   res.json(updated);
 }

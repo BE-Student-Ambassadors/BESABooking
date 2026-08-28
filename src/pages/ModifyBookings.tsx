@@ -372,7 +372,7 @@ const ModifyBookingsPage: React.FC = () => {
     setSaving(true);
     setError(null);
     try {
-      await api.delete("api/bookings/" + bookingId);
+      await api.delete("/api/bookings/" + bookingId);
       resetState();
       setError("Booking canceled.");
     } catch (err) {
