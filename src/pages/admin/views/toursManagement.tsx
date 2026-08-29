@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Dispatch, SetStateAction } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
+import api from "../../../api";
 import { tourBannerOptions } from "../../../data/tourBannerOptions";
 
 {/* Create/Edit Tour Button adaptable for small screen */}
