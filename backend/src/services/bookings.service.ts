@@ -29,11 +29,8 @@ export const bookingService = {
     const tour = await toursRepository.getByIdFromPayload(payload);
     await availabilityService.assertBookingAllowed(payload, tour);
     const besas = await assignmentService.assignBesas(payload, tour);
-    return bookingsRepository.create({
-      payload,
-      besas,
-      tour,
-    });
+    const booking = payload as Record<string, unknown>;
+    return bookingsRepository.create({ ...booking, besas });
   },
 
   async rescheduleBooking(bookingId: string, payload: unknown) {

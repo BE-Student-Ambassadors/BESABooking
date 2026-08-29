@@ -130,10 +130,10 @@ export const bookingsRepository = {
   },
 
   async create(payload: unknown) {
-    return {
-      message: "TODO: persist booking and side effects here.",
-      payload,
-    };
+    const record = payload as Record<string, unknown>;
+    const created = await db.collection("Bookings").add(record);
+    const snapshot = await created.get();
+    return normalizeBookingRecord(created.id, (snapshot.data() ?? {}) as Record<string, unknown>);
   },
 
   async reschedule(bookingId: string, payload: BookingData, besas: unknown) {

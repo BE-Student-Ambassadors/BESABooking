@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft } from "lucide-react";
-import { collection, doc, getDocs, setDoc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
+import api from "../api.ts";
 
 type BookingRecord = {
   tourId?: string;
@@ -983,13 +984,8 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       );
       const endLocal = addMinutes(startLocal, durationMins);
 
-      const bookingsRef = collection(db, "Bookings");
-      const newDocRef = doc(bookingsRef);
-      const bookingId = newDocRef.id;
-
       const updatedBookingData = {
         ...bookingData,
-        bookingId,
         time: bookingData.startTime,
         endTime: endLocal.toLocaleTimeString("en-US", {
           hour: "numeric",
@@ -1000,42 +996,35 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         location: selected.location || "Not specified",
       };
 
-      const autoAssignedBesas = getAutoAssignedBesas(
-        updatedBookingData.tourId,
-        updatedBookingData.date,
-        updatedBookingData.startTime,
-        durationMins
-      );
-
       const bookingPayload = {
         ...updatedBookingData,
-        besas: autoAssignedBesas,
         accommodations: updatedBookingData.accommodations || (updatedBookingData as any).accommodations || "",
         largeTourDetails: updatedBookingData.largeTourDetails || "",
-        id: bookingId,
         createdAt: new Date().toISOString(),
       };
 
-      await setDoc(newDocRef, bookingPayload);
-      console.log("Booking saved to Firestore with auto-assigned BESAs", bookingPayload);
+      const response = await api.post("/api/bookings", bookingPayload);
+      const savedBooking = response.data as BookingData;
+      const bookingId = savedBooking.bookingId;
+      console.log("Booking saved with backend-assigned BESAs", savedBooking);
 
       const confirmationData = {
         id: bookingId,
         tourTitle: selected.title,
-        date: bookingPayload.date,
-        time: bookingPayload.time || bookingPayload.startTime,
-        startTime: bookingPayload.startTime,
-        endTime: bookingPayload.endTime,
+        date: savedBooking.date,
+        time: savedBooking.time || savedBooking.startTime,
+        startTime: savedBooking.startTime,
+        endTime: savedBooking.endTime,
         duration: selected.duration,
         durationUnit: selected.durationUnit,
-        groupSize: bookingPayload.maxAttendees,
-        firstName: bookingPayload.firstName,
-        lastName: bookingPayload.lastName,
-        email: bookingPayload.email,
-        phone: bookingPayload.phone,
-        organization: bookingPayload.organization,
-        role: bookingPayload.role,
-        accommodations: bookingPayload.accommodations,
+        groupSize: savedBooking.maxAttendees,
+        firstName: savedBooking.firstName,
+        lastName: savedBooking.lastName,
+        email: savedBooking.email,
+        phone: savedBooking.phone,
+        organization: savedBooking.organization,
+        role: savedBooking.role,
+        accommodations: savedBooking.accommodations,
         location: selected.location,
         zoomLink: selected.zoomLink,
         calendarEventLink: "",
