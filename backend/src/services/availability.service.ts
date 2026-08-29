@@ -1,8 +1,13 @@
 export const availabilityService = {
   async getAvailability(query: unknown) {
+    const input = (query ?? {}) as Record<string, unknown>;
+
     return {
-      message: "TODO: centralize slot generation and conflict filtering here.",
-      query,
+      tourId: typeof input.tourId === "string" ? input.tourId : "",
+      date: typeof input.date === "string" ? input.date : undefined,
+      available: false,
+      reason: "Availability is not configured yet.",
+      times: [],
     };
   },
 

@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft } from "lucide-react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
-import { getAvailability } from "../api.ts";
 
 type BookingRecord = {
   tourId?: string;
@@ -567,26 +566,6 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [besas, setBesas] = useState<BesaData[]>([]);
 
-  const [apiAvailableTimes, setApiAvailableTimes] = useState<{ time: string; remainingSpots: number }[]>([]);
-  const [loadingTimes, setLoadingTimes] = useState(false);
-
-useEffect(() => {
-  if (!bookingData.tourId || !bookingData.date) {
-    setApiAvailableTimes([]);
-    return;
-  }
-  setLoadingTimes(true);
-  getAvailability(bookingData.tourId, bookingData.date)
-    .then((res) => setApiAvailableTimes(res.times))
-    .catch((err) => {
-      console.error("Failed to fetch availability:", err);
-      setApiAvailableTimes([]);
-    })
-    .finally(() => setLoadingTimes(false));
-}, [bookingData.tourId, bookingData.date]);
-
-
-
   const sections = [
     { id: 1, title: "Date & Type of Tour", description: "Choose your preferred tour and date" },
     { id: 2, title: "Available Times", description: "Select your time slot and group details" },
@@ -723,6 +702,45 @@ useEffect(() => {
   ) => {
     if (rules.blockedTimes.has(slotStartMinutes)) return true;
     return rules.blockedRanges.some((range) => slotStartMinutes < range.end && range.start < slotEndMinutes);
+  };
+
+  const getAvailableTimesForDate = (dateStr: string, tour: Tour) => {
+    if (!dateStr || !isDateAvailable(dateStr, tour).available) return [];
+
+    const durationMinutes =
+      tour.durationUnit === "hours" || tour.durationUnit === "hour"
+        ? tour.duration * 60
+        : tour.duration;
+    const frequencyMinutes =
+      tour.frequencyUnit === "hours" || tour.frequencyUnit === "hour"
+        ? tour.frequency * 60
+        : tour.frequency;
+
+    if (durationMinutes <= 0 || frequencyMinutes <= 0) return [];
+
+    const override = findDateOverride(dateStr, tour);
+    const dayName = new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+    const matchingRange = getMatchingAvailabilityRange(dateStr, tour);
+    const hours = override?.slots?.length
+      ? override.slots
+      : matchingRange?.weeklyHours?.[dayName] || tour.weeklyHours?.[dayName] || [];
+    const blockedRules = getBlockedSlotRules(dateStr, tour);
+    const minimumStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    return hours.flatMap((slot) => generateTimeSlots(slot.start, slot.end, durationMinutes, frequencyMinutes))
+      .filter((time) => {
+        const slotStart = getMinutesFromLabel(time);
+        if (slotStart === null || isSlotBlocked(slotStart, slotStart + durationMinutes, blockedRules)) {
+          return false;
+        }
+
+        const [timePart, meridiem] = time.split(" ");
+        const [hour, minute] = timePart.split(":").map(Number);
+        const hour24 = meridiem === "PM" && hour !== 12 ? hour + 12 : meridiem === "AM" && hour === 12 ? 0 : hour;
+        const slotDateTime = new Date(`${dateStr}T00:00:00`);
+        slotDateTime.setHours(hour24, minute, 0, 0);
+        return slotDateTime >= minimumStart;
+      });
   };
 
   const parseTime12Hour = (time12: string) => {
@@ -1414,10 +1432,7 @@ const renderSection2 = () => {
   const selected = tours.find((t) => t.tourId === bookingData.tourId);
   if (!selected) return null;
 
-  const remainingSpotsByTime = Object.fromEntries(
-    apiAvailableTimes.map((t) => [t.time, t.remainingSpots])
-  );
-  const availableTimes = apiAvailableTimes.map((t) => t.time);
+  const availableTimes = getAvailableTimesForDate(bookingData.date, selected);
 
   const updateGroupSize = (newSize: number) => {
     const maxSize = selected.maxAttendeesPerBooking || 15;
@@ -1459,7 +1474,6 @@ const renderSection2 = () => {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             {availableTimes.length > 0 ? (
               availableTimes.map((time) => {
-                const remainingSpots = getRemainingSpots(time);
                 return (
                   <button
                     key={time}
@@ -1474,11 +1488,6 @@ const renderSection2 = () => {
                   >
                     <Clock className="w-4 h-4 mx-auto mb-2 text-gray-600" />
                     <span className="font-medium block">{time}</span>
-                    {remainingSpots <= 3 && (
-                      <span className="text-xs text-orange-600 mt-1 block">
-                        {remainingSpots} spot{remainingSpots !== 1 ? 's' : ''} left
-                      </span>
-                    )}
                   </button>
                 );
               })
@@ -1491,51 +1500,6 @@ const renderSection2 = () => {
           {errors.time && <p className="text-red-500 text-sm mt-2">{errors.time}</p>}
         </div>
       </div>
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Time Slots</h3>
-        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-          <p>
-            Each time slot reserves one family. You can include up to 5 family members in a single booking.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          {loadingTimes ? (
-            <p className="col-span-full text-center text-gray-500">Loading times...</p>
-          ) : availableTimes.length > 0 ? (
-            availableTimes.map((time) => {
-              const remainingSpots = remainingSpotsByTime[time] ?? 0;
-              return (
-                <button
-                  key={time}
-                  onClick={() => {
-                    updateBookingData("startTime", time);
-                    updateBookingData("time", time);
-                  }}
-                  className={`p-3 border-2 rounded-lg text-center transition-all hover:shadow-md ${bookingData.startTime === time
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-gray-200 hover:border-gray-300"
-                    }`}
-                >
-                  <Clock className="w-4 h-4 mx-auto mb-2 text-gray-600" />
-                  <span className="font-medium block">{time}</span>
-                  {remainingSpots <= 3 && (
-                    <span className="text-xs text-orange-600 mt-1 block">
-                      {remainingSpots} spot{remainingSpots !== 1 ? 's' : ''} left
-                    </span>
-                  )}
-                </button>
-              );
-            })
-          ) : (
-            <p className="col-span-full text-center text-gray-500">
-              No available times for this date
-            </p>
-          )}
-        </div>
-        {errors.time && <p className="text-red-500 text-sm mt-2">{errors.time}</p>}
-      </div>
-
       <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Size</h3>
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
