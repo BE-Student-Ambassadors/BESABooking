@@ -14,7 +14,7 @@ type DashboardResponse = {
 };
 
 type DashboardAssignmentsResponse = {
-  besas: string[];
+  besas: BesaAssignment[];
 };
 
 const isDashboardResponse = (value: unknown): value is DashboardResponse => {
@@ -179,6 +179,13 @@ export default function DashboardView() {
       .map(normalizeBesaEntry)
       .filter((b) => b && typeof b === 'string');
 
+  const normalizeBesaAssignments = (besas?: Array<BesaAssignment | string>) =>
+    (besas || []).flatMap((besa) => {
+      if (typeof besa !== 'string') return [besa];
+      const match = besaList.find((entry) => entry.name === besa);
+      return match ? [{ name: match.name, email: match.email }] : [];
+    });
+
   const requestBesaAssignments = async (bookingData: BookingData) => {
     if (!bookingData.date || !(bookingData.time || bookingData.startTime)) {
       return bookingData;
@@ -226,7 +233,7 @@ export default function DashboardView() {
 
   const handleEditClick = (booking: BookingData) => {
     setEditBooking(booking);
-    setFormData({ ...booking, besas: formatBesas(booking.besas) });
+    setFormData({ ...booking, besas: normalizeBesaAssignments(booking.besas) });
   };
 
   const handleDeleteClick = (booking: BookingData) => {
@@ -255,7 +262,7 @@ export default function DashboardView() {
     try {
       const saveData = {
         ...formData,
-        besas: formData.besas?.filter(besa => besa.trim() !== '') || []
+        besas: normalizeBesaAssignments(formData.besas),
       };
       if (!formData.bookingId) throw new Error("Missing bookingId on formData");
       await api.patch(`/api/admin/bookings/${formData.bookingId}`, saveData);
@@ -819,8 +826,16 @@ export default function DashboardView() {
                     value=""
                     onChange={(e) => {
                       if (e.target.value) {
-                        const newBesas = [...(formData.besas || []), e.target.value];
-                        setFormData({ ...formData, besas: newBesas });
+                        const selectedBesa = besaList.find((besa) => besa.id === e.target.value);
+                        if (selectedBesa) {
+                          setFormData({
+                            ...formData,
+                            besas: [
+                              ...(formData.besas || []),
+                              { name: selectedBesa.name, email: selectedBesa.email },
+                            ],
+                          });
+                        }
                         (e.target as HTMLSelectElement).value = ""; // Reset selection
                       }
                     }}
@@ -828,9 +843,11 @@ export default function DashboardView() {
                   >
                     <option value="">Add BESA manually...</option>
                     {besaList
-                      .filter(b => b.status === 'active' && !formData.besas?.includes(b.name))
+                      .filter(b => b.status === 'active' && !formData.besas?.some((assigned) =>
+                        typeof assigned === 'object' && assigned.name === b.name
+                      ))
                       .map((besa) => (
-                        <option key={besa.id} value={besa.name}>
+                        <option key={besa.id} value={besa.id}>
                           {besa.name}
                         </option>
                       ))
