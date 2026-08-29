@@ -19,7 +19,7 @@ The Vite development server proxies `/api/*` requests to `http://127.0.0.1:8000`
 
 ## Deploying to Vercel
 
-Vercel deploys `api/[...path].ts` as one Node.js serverless function. It runs the existing Express app for every `/api/*` request, while the SPA rewrite serves frontend routes.
+Vercel deploys `api/index.ts` as one Node.js serverless function. The Vercel rewrite sends every `/api/*` request to it, then it restores the original URL for the existing Express routes. The SPA rewrite serves frontend routes.
 
 In Vercel project settings, set the Root Directory to `BESABooking` if this repository is deployed from its parent directory. Use the Vite framework preset, build command `npm run build`, and output directory `dist`.
 
