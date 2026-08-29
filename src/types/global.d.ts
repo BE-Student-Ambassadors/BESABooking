@@ -141,6 +141,11 @@ declare global {
         };
     }
 
+    interface BesaAssignment {
+        name: string;
+        email: string;
+    }
+
     interface BookingData {
         bookingId: string; // specific ID for each booking
         tourId?: string; // gets tour name for display purposes
@@ -154,7 +159,7 @@ declare global {
         time?: string;
         attendees: number;
         maxAttendees: number;
-        besas: string[];
+        besas: Array<BesaAssignment | string>;
         email?: string;
         firstName?: string;
         lastName?: string;

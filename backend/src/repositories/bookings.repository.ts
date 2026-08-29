@@ -8,15 +8,13 @@ function normalizeBesaEntry(besa: unknown) {
 
   if (besa && typeof besa === "object") {
     const named = besa as { name?: unknown; email?: unknown };
-    if (typeof named.name === "string" && named.name.trim() !== "") {
-      return named.name;
-    }
-    if (typeof named.email === "string" && named.email.trim() !== "") {
-      return named.email;
-    }
+    return {
+      name: typeof named.name === "string" ? named.name.trim() : "",
+      email: typeof named.email === "string" ? named.email.trim() : "",
+    };
   }
 
-  return String(besa ?? "");
+  return "";
 }
 
 function normalizeBookingRecord(bookingId: string, data: Record<string, unknown>) {

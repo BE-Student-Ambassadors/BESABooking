@@ -179,11 +179,12 @@ export const assignmentService = {
       })
       .slice(0, 2);
 
-    return availableBesas
-      .map((besa) => {
-        const name = (besa as Record<string, unknown>).name;
-        return typeof name === "string" ? name.trim() : "";
-      })
-      .filter(Boolean);
+    return availableBesas.map((besa) => {
+      const record = besa as Record<string, unknown>;
+      return {
+        name: typeof record.name === "string" ? record.name.trim() : "",
+        email: typeof record.email === "string" ? record.email.trim() : "",
+      };
+    });
   },
 };

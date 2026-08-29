@@ -15,7 +15,12 @@ const dayMapping = {
 
 type NormalizedOfficeHours = Record<string, { available: boolean; timeSlots: Array<{ id: string; start: string; end: string }> }>;
 type NormalizedTour = Record<string, unknown> & { tourId: string };
-type NormalizedBooking = Record<string, unknown> & { bookingId: string; date: string; besas: string[] };
+type BesaAssignment = { name: string; email: string };
+type NormalizedBooking = Record<string, unknown> & {
+  bookingId: string;
+  date: string;
+  besas: Array<BesaAssignment | string>;
+};
 
 function parseTime12Hour(time12?: string) {
   if (!time12) {
@@ -144,13 +149,28 @@ function normalizeTour(tour: Record<string, unknown>): NormalizedTour {
   };
 }
 
+function normalizeBesaAssignment(value: unknown): BesaAssignment | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const besa = value as Record<string, unknown>;
+  const name = typeof besa.name === "string" ? besa.name.trim() : "";
+  const email = typeof besa.email === "string" ? besa.email.trim() : "";
+  return name && email ? { name, email } : undefined;
+}
+
 function normalizeBooking(booking: Record<string, unknown>): NormalizedBooking {
   return {
     ...booking,
     bookingId: typeof booking.bookingId === "string" ? booking.bookingId : "",
     date: normalizeDateKey(booking.date),
     besas: Array.isArray(booking.besas)
-      ? booking.besas.filter((value): value is string => typeof value === "string")
+      ? booking.besas.flatMap<BesaAssignment | string>((value) => {
+        if (typeof value === "string" && value.trim()) return [value.trim()];
+        const assignment = normalizeBesaAssignment(value);
+        return assignment ? [assignment] : [];
+      })
       : [],
   };
 }
@@ -192,9 +212,8 @@ function sanitizeBookingUpdate(payload: unknown) {
 
   if (Array.isArray(sanitized.besas)) {
     sanitized.besas = sanitized.besas
-      .filter((value): value is string => typeof value === "string")
-      .map((value) => value.trim())
-      .filter(Boolean);
+      .map(normalizeBesaAssignment)
+      .filter((assignment): assignment is BesaAssignment => Boolean(assignment));
   }
 
   return sanitized;
@@ -219,7 +238,9 @@ function enrichBesasWithStats(
   const { startOfWeek, endOfWeek } = getWeekBounds();
 
   return besas.map((besa) => {
-    const besaBookings = bookings.filter((booking) => booking.besas.includes(besa.name));
+    const besaBookings = bookings.filter((booking) => booking.besas.some((assigned) =>
+      typeof assigned === "string" ? assigned === besa.name : assigned.name === besa.name
+    ));
     const toursThisWeek = besaBookings.filter((booking) => {
       if (!booking.date) {
         return false;
