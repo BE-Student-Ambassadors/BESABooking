@@ -32,8 +32,6 @@ declare global {
         endDate?: string; // Optional end date
         durationUnit: 'minutes' | 'hours' | 'hour'; // Unit for duration
         maxAttendeesPerBooking: number; // Maximum number of attendees per booking
-        bookingNotice?: string; // Tour-specific message shown before selecting a booking date
-        bannerImageUrl?: string; // Optional banner shown when this tour is selected
         maxBookings: number; // Maximum number of bookings allowed per session
         location: string; // Physical location or 'Online'
         zoomLink: string; // Zoom link if applicable
@@ -42,7 +40,6 @@ declare global {
         // Availability
         weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours
         availabilityRanges?: AvailabilityRange[]; // Date ranges with their own recurring hours
-        googleCalendarId?: string; // Google Calendar destination for bookings from this tour
         // Example: { monday: [{ start: '09:00', end: '17:00' }], tuesday: [...] }  
 
         // Date-Specific Availability
@@ -116,11 +113,6 @@ declare global {
         available: boolean;
         timeSlots: TimeSlot[];
     }
-    type TimeSlot = {
-        id: string;
-        start: string;
-        end: string;
-    };
     
     type OfficeHours = {
         available: boolean;
@@ -187,7 +179,6 @@ declare global {
       };
     };
 
-    type UserRole = 'public' | 'admin';
     type DateSpecificSlot = { start: string; end: string };
     type DateSpecificHours = { date: string; unavailable?: boolean; slots: DateSpecificSlot[] };
     

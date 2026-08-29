@@ -4,8 +4,6 @@ import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
 
-import api, { getAvailability, createBooking } from "../api";
-
 type BookingRecord = {
   tourId?: string;
   date?: string;
@@ -377,6 +375,79 @@ function toLocalISO(dt: Date): string {
   );
 }
 
+function formatDescriptionInline(text: string) {
+  return text.split(/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => {
+    if (part.startsWith('***') && part.endsWith('***')) {
+      return <strong key={index}>{part.slice(3, -3)}</strong>;
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
+function FormattedTourDescription({
+  description,
+  title,
+  compact = false,
+}: {
+  description: string;
+  title: string;
+  compact?: boolean;
+}) {
+  const normalizedDescription = description
+    .replace(/\r\n?/g, '\n')
+    // A standalone backslash is commonly pasted as a manual paragraph separator.
+    .replace(/(?:^|\n)\s*\\\s*(?=\n|$)/g, '\n');
+  const blocks = normalizedDescription.split(/\n\s*\n+/).filter((block) => block.trim());
+
+  return (
+    <div
+      className={`mb-4 space-y-3 overflow-y-auto pr-3 text-sm leading-relaxed text-gray-600 ${compact ? 'max-h-32' : 'max-h-48'}`}
+      tabIndex={0}
+      aria-label={`${title} description`}
+    >
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split('\n').filter((line) => line.trim());
+
+        return (
+          <div key={blockIndex} className="space-y-1">
+            {lines.map((line, lineIndex) => {
+              const headingMatch = line.match(/^\*\*\*(.+?)\*\*\*\s*(.*)$/);
+              const bulletMatch = line.match(/^(\s*)[-*]\s+(.+)$/);
+
+              if (headingMatch) {
+                return (
+                  <div key={lineIndex} className="space-y-1">
+                    <h4 className="text-base font-bold leading-snug text-indigo-700">{headingMatch[1]}</h4>
+                    {headingMatch[2] && <p>{formatDescriptionInline(headingMatch[2])}</p>}
+                  </div>
+                );
+              }
+
+              if (bulletMatch) {
+                const indent = Math.floor(bulletMatch[1].length / 2);
+                return (
+                  <div key={lineIndex} className="flex gap-2" style={{ marginLeft: `${indent * 1.25}rem` }}>
+                    <span aria-hidden="true">•</span>
+                    <span>{formatDescriptionInline(bulletMatch[2])}</span>
+                  </div>
+                );
+              }
+
+              return <p key={lineIndex}>{formatDescriptionInline(line)}</p>;
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function BookingPage() {
   const [tours, setTours] = useState<Tour[]>([]);
   const navigate = useNavigate();
@@ -394,7 +465,9 @@ function BookingPage() {
             description: data.description ?? "",
             duration: data.duration ?? 0,
             durationUnit: data.durationUnit ?? "minutes",
-            maxAttendeesPerBooking: data.maxAttendees ?? 5,
+            maxAttendeesPerBooking: data.maxAttendeesPerBooking ?? data.maxAttendees ?? 5,
+            bookingNotice: data.bookingNotice ?? "",
+            bannerImageUrl: data.bannerImageUrl ?? "",
             maxBookings: data.maxBookings ?? 3,
             startDate: data.startDate, // ← Add this
             endDate: data.endDate, // ← Add this
@@ -872,26 +945,95 @@ useEffect(() => {
   if (!validateSection(currentSection)) return;
   setIsSubmitting(true);
 
-  try {
-    const selected = tours.find((t) => t.tourId === bookingData.tourId);
-    if (!selected) throw new Error("Selected tour not found.");
+    try {
+      const selected = tours.find((t) => t.tourId === bookingData.tourId);
+      if (!selected) throw new Error("Selected tour not found.");
 
-    const booking = await createBooking({
-      tourId: bookingData.tourId,
-      date: bookingData.date,
-      startTime: bookingData.startTime,
-      firstName: bookingData.firstName,
-      lastName: bookingData.lastName,
-      email: bookingData.email,
-      phone: bookingData.phone,
-      organization: bookingData.organization,
-      role: bookingData.role,
-      maxAttendees: bookingData.maxAttendees,
-      interests: bookingData.interests,
-      accommodations: bookingData.accommodations,
-      largeTourDetails: bookingData.largeTourDetails,
-      notes: bookingData.notes,
-    });
+      const durationMins =
+        selected.durationUnit === "hours" || selected.durationUnit === "hour"
+          ? selected.duration * 60
+          : selected.duration;
+
+      if (!bookingData.date || !bookingData.startTime) {
+        throw new Error("Missing date or time.");
+      }
+
+      const startLocal = parseLocalDateTime(
+        bookingData.date,
+        bookingData.startTime
+      );
+      const endLocal = addMinutes(startLocal, durationMins);
+
+      const bookingsRef = collection(db, "Bookings");
+      const newDocRef = doc(bookingsRef);
+      const bookingId = newDocRef.id;
+
+      const updatedBookingData = {
+        ...bookingData,
+        bookingId,
+        time: bookingData.startTime,
+        endTime: endLocal.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        startTimeISO: toLocalISO(startLocal),
+        endTimeISO: toLocalISO(endLocal),
+        location: selected.location || "Not specified",
+      };
+
+      const autoAssignedBesas = getAutoAssignedBesas(
+        updatedBookingData.tourId,
+        updatedBookingData.date,
+        updatedBookingData.startTime,
+        durationMins
+      );
+
+      const bookingPayload = {
+        ...updatedBookingData,
+        besas: autoAssignedBesas,
+        accommodations: updatedBookingData.accommodations || (updatedBookingData as any).accommodations || "",
+        largeTourDetails: updatedBookingData.largeTourDetails || "",
+        id: bookingId,
+        createdAt: new Date().toISOString(),
+      };
+
+      await setDoc(newDocRef, bookingPayload);
+      console.log("Booking saved to Firestore with auto-assigned BESAs", bookingPayload);
+
+      const confirmationData = {
+        id: bookingId,
+        tourTitle: selected.title,
+        date: bookingPayload.date,
+        time: bookingPayload.time || bookingPayload.startTime,
+        startTime: bookingPayload.startTime,
+        endTime: bookingPayload.endTime,
+        duration: selected.duration,
+        durationUnit: selected.durationUnit,
+        groupSize: bookingPayload.maxAttendees,
+        firstName: bookingPayload.firstName,
+        lastName: bookingPayload.lastName,
+        email: bookingPayload.email,
+        phone: bookingPayload.phone,
+        organization: bookingPayload.organization,
+        role: bookingPayload.role,
+        accommodations: bookingPayload.accommodations,
+        location: selected.location,
+        zoomLink: selected.zoomLink,
+        calendarEventLink: "",
+        createdAt: new Date().toISOString(),
+      };
+
+      navigate("/booking-confirmation", {
+        state: { bookingData: confirmationData },
+        replace: true,
+      });
+    } catch (error) {
+      console.error("Error during submission:", error);
+      alert("Failed to submit booking. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
     const confirmationData = {
       id: booking.bookingId,
@@ -1149,17 +1291,28 @@ const renderSectionIndicator = () => {
 
     return (
       <div className="space-y-6">
-
         <div>
           <div className="grid gap-6">
             {selectedTour ? (
               // Show only the selected tour
               selectedTourData && (
                 <div className="tour-card selected">
+                  {selectedTourData.bannerImageUrl?.trim() && (
+                    <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-sm">
+                      <img
+                        src={selectedTourData.bannerImageUrl}
+                        alt={`${selectedTourData.title} banner`}
+                        className="block h-auto w-full"
+                      />
+                    </div>
+                  )}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-indigo-600 mb-2">{selectedTourData.title}</h3>
-                      <p className="text-gray-600 text-sm mb-4">{selectedTourData.description}</p>
+                      <FormattedTourDescription
+                        description={selectedTourData.description}
+                        title={selectedTourData.title}
+                      />
                       <div className="text-sm text-gray-700 space-y-1">
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
@@ -1188,7 +1341,7 @@ const renderSectionIndicator = () => {
               tours.map((tour) => (
                 <div key={tour.tourId} className="tour-card">
                   <h3 className="text-lg font-semibold text-indigo-600 mb-2">{tour.title}</h3>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-3">{tour.description}</p>
+                  <FormattedTourDescription description={tour.description} title={tour.title} compact />
                   <div className="text-sm text-gray-700 space-y-1">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
@@ -1216,6 +1369,13 @@ const renderSectionIndicator = () => {
             <AlertCircle className="w-4 w-4" />
             {errors.tourType}
           </p>
+        )}
+
+        {selectedTourData?.bookingNotice?.trim() && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+            <p className="font-semibold">Before you book</p>
+            <p className="mt-1 whitespace-pre-line leading-6">{selectedTourData.bookingNotice.trim()}</p>
+          </div>
         )}
 
         <div>
@@ -1321,12 +1481,50 @@ const renderSection2 = () => {
           <div className="p-2 bg-blue-600 rounded-lg">
             <Calendar className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <p className="font-medium text-blue-900">{selected.title}</p>
-            <p className="text-blue-700 text-sm">
-              {bookingData.date} • {selected.duration} {selected.durationUnit}
-            </p>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Time Slots</h3>
+          {selected.maxAttendeesPerBooking >= 5 && (
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <p>
+                Each time slot reserves one family. You can include up to 5 family members in a single booking.
+              </p>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            {availableTimes.length > 0 ? (
+              availableTimes.map((time) => {
+                const remainingSpots = getRemainingSpots(time);
+                return (
+                  <button
+                    key={time}
+                    onClick={() => {
+                      updateBookingData("startTime", time);
+                      updateBookingData("time", time);
+                    }}
+                    className={`p-3 border-2 rounded-lg text-center transition-all hover:shadow-md ${bookingData.startTime === time
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-200 hover:border-gray-300"
+                      }`}
+                  >
+                    <Clock className="w-4 h-4 mx-auto mb-2 text-gray-600" />
+                    <span className="font-medium block">{time}</span>
+                    {remainingSpots <= 3 && (
+                      <span className="text-xs text-orange-600 mt-1 block">
+                        {remainingSpots} spot{remainingSpots !== 1 ? 's' : ''} left
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            ) : (
+              <p className="col-span-full text-center text-gray-500">
+                No available times for this date
+              </p>
+            )}
           </div>
+          {errors.time && <p className="text-red-500 text-sm mt-2">{errors.time}</p>}
         </div>
       </div>
       <div>

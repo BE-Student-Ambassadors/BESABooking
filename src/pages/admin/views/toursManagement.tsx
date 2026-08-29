@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Dispatch, SetStateAction } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
+import { tourBannerOptions } from "../../../data/tourBannerOptions";
 
 {/* Create/Edit Tour Button adaptable for small screen */}
 {/* Allow to move order of tours (group first, etc) */}
@@ -57,12 +58,15 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     duration: 60,
     durationUnit: 'minutes',
     maxAttendeesPerBooking: 5,
+    bookingNotice: '',
+    bannerImageUrl: '',
     maxBookings: 3,
     location: '',
     zoomLink: '',
     autoGenerateZoom: false,
     weeklyHours: {},
     availabilityRanges: [createDefaultAvailabilityRange()],
+    googleCalendarId: '',
     dateSpecificBlockDays: [],
     dateSpecificDays: [],
     frequency: 60,
@@ -249,6 +253,45 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               />
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Booking Notice</label>
+            <textarea
+              rows={3}
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
+              placeholder="For example: One booking per person. If your party has multiple people, please make a separate booking for each person."
+              value={tour.bookingNotice || ''}
+              onChange={(e) => updateTour({ bookingNotice: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-gray-500">Shown above the date calendar only when this tour is selected.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tour Banner</label>
+            <select
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+              value={tourBannerOptions.some((option) => option.url === tour.bannerImageUrl) ? tour.bannerImageUrl : ''}
+              onChange={(e) => updateTour({ bannerImageUrl: e.target.value })}
+            >
+              <option value="">Choose an image from the banner library</option>
+              {tourBannerOptions.map((option) => (
+                <option key={option.url} value={option.url}>{option.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Repository banners are stored in `public/tour-banners` and listed in `src/data/tourBannerOptions.ts`.</p>
+            {tour.bannerImageUrl && (
+              <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                <img src={tour.bannerImageUrl} alt="Tour banner preview" className="h-auto w-full" />
+                <button
+                  type="button"
+                  onClick={() => updateTour({ bannerImageUrl: '' })}
+                  className="m-3 text-sm font-medium text-red-600 hover:text-red-700"
+                >
+                  Remove banner
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       );
 
@@ -413,6 +456,31 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             </div>
           </div>
         ))}
+      </div>
+    </div>
+
+    {/* Google Calendar Destination */}
+    <div className="border-t pt-4 2xl:pt-6">
+      <h3 className="text-base 2xl:text-lg font-medium text-gray-900 mb-3 2xl:mb-4">Google Calendar</h3>
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 2xl:p-4">
+        <label htmlFor="google-calendar-id" className="block text-sm font-medium text-gray-700 mb-2">
+          Save bookings to
+        </label>
+        <input
+          id="google-calendar-id"
+          list="google-calendar-options"
+          type="text"
+          className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+          placeholder="primary or a Google Calendar ID"
+          value={tour.googleCalendarId || ''}
+          onChange={(e) => updateTour({ googleCalendarId: e.target.value.trim() })}
+        />
+        <datalist id="google-calendar-options">
+          <option value="primary">Primary calendar</option>
+        </datalist>
+        <p className="text-xs text-gray-500 mt-2">
+          Enter <code>primary</code> for the connected account's main calendar, or paste a calendar ID such as an email address.
+        </p>
       </div>
     </div>
 
