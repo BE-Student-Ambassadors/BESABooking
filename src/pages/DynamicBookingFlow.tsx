@@ -1035,43 +1035,6 @@ useEffect(() => {
     }
   };
 
-    const confirmationData = {
-      id: booking.bookingId,
-      tourTitle: selected.title,
-      date: booking.date,
-      time: booking.startTime,
-      startTime: booking.startTime,
-      endTime: booking.endTime,
-      duration: selected.duration,
-      durationUnit: selected.durationUnit,
-      groupSize: booking.maxAttendees,
-      firstName: booking.firstName,
-      lastName: booking.lastName,
-      email: booking.email,
-      phone: booking.phone,
-      organization: booking.organization,
-      role: booking.role,
-      accommodations: booking.accommodations,
-      location: booking.location,
-      zoomLink: selected.zoomLink,
-      calendarEventLink: "",
-      createdAt: booking.createdAt,
-    };
-
-    navigate("/booking-confirmation", {
-      state: { bookingData: confirmationData },
-      replace: true,
-    });
-  } catch (error: any) {
-    console.error("Error during submission:", error);
-    const message =
-      error?.response?.data?.detail ||
-      "Failed to submit booking. Please try again.";
-    alert(message);
-  } finally {
-    setIsSubmitting(false);
-  }
-};
 const renderSectionIndicator = () => {
   const progressPct = (currentSection / sections.length) * 100;
   return (
