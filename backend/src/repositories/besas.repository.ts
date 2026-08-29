@@ -1,4 +1,5 @@
 import { db } from "../config/firebaseAdmin.js";
+import { AppError } from "../utils/errors.js";
 
 export const besasRepository = {
   async list() {
@@ -18,25 +19,52 @@ export const besasRepository = {
   },
 
   async create(payload: unknown) {
+    const record = payload as Record<string, unknown>;
+    const created = await db.collection("Besas").add(record);
+    const snapshot = await created.get();
     return {
-      message: "TODO: create a BESA document here.",
-      payload,
+      id: snapshot.id,
+      ...snapshot.data(),
     };
   },
 
   async update(besaId: string, payload: unknown) {
+    const besaRef = db.collection("Besas").doc(besaId);
+    const snapshot = await besaRef.get();
+    if (!snapshot.exists) {
+      throw new AppError("BESA not found.", 404);
+    }
+
+    await besaRef.update(payload as Record<string, unknown>);
+    const updated = await besaRef.get();
     return {
-      message: "TODO: update a BESA document here.",
-      besaId,
-      payload,
+      id: updated.id,
+      ...updated.data(),
     };
   },
 
   async updateOfficeHours(besaId: string, payload: unknown) {
+    const besaRef = db.collection("Besas").doc(besaId);
+    const snapshot = await besaRef.get();
+    if (!snapshot.exists) {
+      throw new AppError("BESA not found.", 404);
+    }
+
+    await besaRef.update(payload as Record<string, unknown>);
+    const updated = await besaRef.get();
     return {
-      message: "TODO: update BESA office hours here.",
-      besaId,
-      payload,
+      id: updated.id,
+      ...updated.data(),
     };
+  },
+
+  async delete(besaId: string) {
+    const besaRef = db.collection("Besas").doc(besaId);
+    const snapshot = await besaRef.get();
+    if (!snapshot.exists) {
+      throw new AppError("BESA not found.", 404);
+    }
+
+    await besaRef.delete();
   },
 };

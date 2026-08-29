@@ -1,10 +1,21 @@
-import axios from 'axios'
+import axios from 'axios';
+import { auth } from './firebaseAuth.ts';
+
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || '';
 
 const api = axios.create({
     // Production uses the Vercel function on this same domain. Set this only
     // when intentionally using a separately hosted API.
     baseURL: import.meta.env.VITE_API_BASE_URL ?? ""
 })
+
+api.interceptors.request.use(async (config) => {
+  const user = auth.currentUser;
+  if (user) {
+    config.headers.Authorization = `Bearer ${await user.getIdToken()}`;
+  }
+  return config;
+});
 
 export interface TimeSlotOption {
   time: string;

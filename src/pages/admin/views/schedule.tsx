@@ -1,7 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../../src/firebase.ts';
 import { Calendar, List } from 'lucide-react';
+import api from '../../../api';
+
+type ScheduleResponse = {
+  besas: Besa[];
+  tours: Tour[];
+  bookings: BookingData[];
+};
 
 export default function ScheduleView() {
   const [besas, setBesas] = useState<Besa[]>([]);
@@ -108,66 +113,20 @@ export default function ScheduleView() {
 
   // ---------- data fetch ----------
   useEffect(() => {
-    const fetchBesas = async () => {
+    const fetchScheduleData = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'Besas'));
-        const besasData = querySnapshot.docs.map(doc => {
-          const data = doc.data() as any;
-          const convertedOfficeHours: { [day: string]: OfficeHours } = {};
-          Object.entries(data.officeHours || {}).forEach(([day, hours]: [string, any]) => {
-            if (typeof hours === 'object' && 'start' in hours && 'end' in hours) {
-              convertedOfficeHours[day] = {
-                available: hours.available || false,
-                timeSlots: hours.available
-                  ? [{ id: Math.random().toString(36).substr(2, 9), start: hours.start || '09:00', end: hours.end || '17:00' }]
-                  : []
-              };
-            } else {
-              convertedOfficeHours[day] = (hours as OfficeHours) || { available: false, timeSlots: [] };
-            }
-          });
-          return { id: doc.id, ...data, officeHours: convertedOfficeHours } as Besa[];
-        }) as unknown as Besa[];
-        setBesas(besasData);
+        const response = await api.get<ScheduleResponse>('/api/admin/schedule');
+        setBesas(response.data.besas);
+        setTours(response.data.tours);
+        setBookings(response.data.bookings.map((booking) => ({
+          ...booking,
+          date: normalizeDateKey(booking.date),
+        })));
       } catch (error) {
-        console.error('Error fetching besas from Firestore:', error);
+        console.error('Error fetching admin schedule data:', error);
       }
     };
-    fetchBesas();
-  }, []);
-
-  useEffect(() => {
-    const fetchTours = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'mockTours'));
-        const tourData = querySnapshot.docs.map(doc => ({
-          tourId: doc.id,
-          ...doc.data(),
-        })) as Tour[];
-        setTours(tourData);
-      } catch (error) {
-        console.error('Error fetching tours from Firestore:', error);
-      }
-    };
-    fetchTours();
-  }, []);
-
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'Bookings'));
-        // Store the doc id as bookingId (stable key)
-        const bookingsData = querySnapshot.docs.map(doc => ({
-          ...doc.data(),
-          bookingId: doc.id, // doc.id must win over any stored bookingId
-          date: normalizeDateKey((doc.data() as any).date),
-        })) as BookingData[];
-        setBookings(bookingsData);
-      } catch (error) {
-        console.error('Error fetching bookings from Firestore:', error);
-      }
-    };
-    fetchBookings();
+    void fetchScheduleData();
   }, []);
 
   // ---------- calendar grid ----------
@@ -210,7 +169,7 @@ export default function ScheduleView() {
 
     try {
       setIsDeleting(true);
-      await deleteDoc(doc(db, 'Bookings', selectedBooking.bookingId));
+      await api.delete(`/api/admin/bookings/${selectedBooking.bookingId}`);
       setBookings(prev => prev.filter(b => b.bookingId !== selectedBooking.bookingId));
       setSelectedBooking(null);
     } catch (error) {
@@ -234,7 +193,7 @@ export default function ScheduleView() {
 
     try {
       setIsSaving(true);
-      await updateDoc(doc(db, 'Bookings', editForm.bookingId), payload as any);
+      await api.patch(`/api/admin/bookings/${editForm.bookingId}`, payload);
       setBookings(prev => prev.map(b => (b.bookingId === editForm.bookingId ? { ...b, ...payload } : b)));
       setSelectedBooking(prev => (prev && prev.bookingId === payload.bookingId ? { ...prev, ...payload } : prev));
       setIsEditing(false);

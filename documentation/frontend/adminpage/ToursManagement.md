@@ -1,6 +1,6 @@
 # ToursManagement.tsx
 
-Admin UI for creating, editing, ordering, and globally blocking tour availability.
+Admin UI for creating, editing, ordering, publishing, and globally blocking tour availability.
 
 - **File**: `src/pages/admin/views/toursManagement.tsx`
 - **Related**: [Admin Pages overview](./README.md) • [App.tsx](../mainpage/App.md) routes into this view.
@@ -17,23 +17,23 @@ Admin UI for creating, editing, ordering, and globally blocking tour availabilit
   - Validates minimal fields per step (`canProceed`).
 
 - `ToursDashboard`
-  - Subscribes to `Tours` collection via `onSnapshot`; populates `tours` state and enforces `displayOrder` sorting.
-  - Actions per tour: edit, publish/unpublish, delete, move up/down (reorders and writes `displayOrder` back to Firestore), view location/date summaries.
+  - Loads tours from `GET /api/tours`; populates `tours` state and enforces `displayOrder` sorting.
+  - Actions per tour: edit, publish/unpublish, delete, move up/down (reorders and writes `displayOrder` back through API patches), view location/date summaries.
   - Filters: search term (title/description) and status (all/published/draft).
   - Universal holidays sidebar:
     - Aggregates `dateSpecificBlockDays` where `appliesToAllTours` is true across tours (`useMemo`).
-    - Add universal override: pushes to every tour unless duplicate; persists with `updateDoc`.
-    - Remove universal override: strips matching block from every tour.
+    - Add universal override: pushes to every tour unless duplicate; persists through `PATCH /api/tours/:tourId`.
+    - Remove universal override: strips matching block from every tour through the same API.
 
 - `ToursManagement` (default export)
   - Page-level router between `ToursDashboard` and `TourFormPage`.
   - Holds shared `tours` state and `editingTour`.
-  - `handleSaveTour` updates local state after form save; Firestore writes happen inside `TourFormPage`.
+  - `handleSaveTour` updates local state after form save; persisted writes are performed through the backend API handlers used inside `TourFormPage`.
 
 ## State & Data Flow
 
-- Live sync: `onSnapshot` → `setTours` (typed as `Dispatch<SetStateAction<Tour[]>>`).
-- Reordering: local swap → optimistic `setTours` → `updateDoc` for each tour’s `displayOrder`.
+- Backend load: `GET /api/tours` → `setTours` (typed as `Dispatch<SetStateAction<Tour[]>>`).
+- Reordering: local swap → optimistic `setTours` → `PATCH /api/tours/:tourId` for each tour’s `displayOrder`.
 - Date-specific logic: `dateSpecificBlockDays` items optionally include `appliesToAllTours`; universal sidebar keeps cross-tour view consistent.
 - Calendar destination: `googleCalendarId` is set in the Availability step. The booking Calendar Function reads this value from the saved tour, not from the browser booking payload.
 

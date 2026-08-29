@@ -36,8 +36,10 @@ declare global {
         bannerImageUrl?: string; // Optional banner shown when this tour is selected
         maxBookings: number; // Maximum number of bookings allowed per session
         location: string; // Physical location or 'Online'
+        calendarInviteLocation?: string; // Optional location shown on the calendar invite
         zoomLink: string; // Zoom link if applicable
         autoGenerateZoom: boolean;
+        calendarInviteDetails?: string; // Optional custom details shown on the calendar invite
 
         // Availability
         weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours

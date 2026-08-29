@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { toursService } from "../services/tours.service.js";
+import { getRouteParam } from "../utils/request.js";
 
 export async function listTours(_req: Request, res: Response) {
   const tours = await toursService.listTours();

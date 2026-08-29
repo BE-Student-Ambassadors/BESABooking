@@ -1,11 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  updatePassword,
-} from 'firebase/auth';
 import { AlertCircle, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { auth } from '../../../../src/firebaseAuth.ts';
+import api from '../../../api';
 
 export default function SettingsView() {
   const [currentEmail, setCurrentEmail] = useState<string>(auth.currentUser?.email || '');
@@ -20,20 +16,6 @@ export default function SettingsView() {
     });
     return () => unsubscribe();
   }, []);
-
-  const ensureUser = () => {
-    const user = auth.currentUser;
-    if (!user) throw new Error('You need to be signed in to update settings.');
-    if (!user.email) throw new Error('Missing email for the current user.');
-    return user;
-  };
-
-  const reauthenticate = async (password: string) => {
-    const user = ensureUser();
-    const credential = EmailAuthProvider.credential(user.email!, password);
-    await reauthenticateWithCredential(user, credential);
-    return user;
-  };
 
   const handlePasswordUpdate = async (e: FormEvent) => {
     e.preventDefault();
@@ -55,8 +37,14 @@ export default function SettingsView() {
 
     setPasswordLoading(true);
     try {
-      const user = await reauthenticate(passwordForm.currentPassword);
-      await updatePassword(user, passwordForm.newPassword);
+      if (!currentEmail) {
+        throw new Error('Missing email for the current user.');
+      }
+      await api.post('/api/admin/settings/password', {
+        email: currentEmail,
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
       setMessage('Password updated successfully.');
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: any) {

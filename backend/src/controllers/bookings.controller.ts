@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { availabilityService } from "../services/availability.service.js";
 import { bookingService } from "../services/bookings.service.js";
+import { getRouteParam } from "../utils/request.js";
 
 export async function getBookingByReference(req: Request, res: Response) {
   const booking = await bookingService.getBookingByReference(req.query);
