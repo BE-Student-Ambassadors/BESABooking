@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
+import { getAvailability } from "../api.ts";
 
 type BookingRecord = {
   tourId?: string;
