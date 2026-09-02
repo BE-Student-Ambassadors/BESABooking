@@ -8,5 +8,14 @@ The Tours Management page is backed by the `Tours` collection in Firestore.
 
 ## Backend Behavior
 
-- Tour create/update actions write directly to Firestore.
+- `GET /api/tours`
+  - Returns the tour list for the management dashboard.
+- `POST /api/tours`
+  - Creates a new tour definition.
+- `PATCH /api/tours/:tourId`
+  - Updates an existing tour, including display order and date-specific block days.
+- `PATCH /api/tours/:tourId/publish`
+  - Toggles published state.
+- `DELETE /api/tours/:tourId`
+  - Deletes a tour.
 - Public booking behavior depends on the data maintained here.

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { besasService } from "../services/besas.service.js";
+import { getRouteParam } from "../utils/request.js";
 
 export async function listBesas(_req: Request, res: Response) {
   const besas = await besasService.listBesas();
@@ -12,11 +13,16 @@ export async function createBesa(req: Request, res: Response) {
 }
 
 export async function updateBesa(req: Request, res: Response) {
-  const updated = await besasService.updateBesa(req.params.besaId, req.body);
+  const updated = await besasService.updateBesa(req.params.besaId as string, req.body);
   res.json(updated);
 }
 
 export async function updateOfficeHours(req: Request, res: Response) {
-  const updated = await besasService.updateOfficeHours(req.params.besaId, req.body);
+  const updated = await besasService.updateOfficeHours(req.params.besaId as string, req.body);
   res.json(updated);
+}
+
+export async function deleteBesa(req: Request, res: Response) {
+  await besasService.deleteBesa(getRouteParam(req.params.besaId));
+  res.status(204).send();
 }

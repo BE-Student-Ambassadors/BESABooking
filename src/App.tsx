@@ -110,6 +110,74 @@ const FeedbackButton = () => {
   );
 };
 
+function formatDescriptionInline(text: string) {
+  return text.split(/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => {
+    if (part.startsWith('***') && part.endsWith('***')) {
+      return <strong key={index}>{part.slice(3, -3)}</strong>;
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
+function TourDescription({ description, title }: { description: string; title: string }) {
+  const normalizedDescription = description
+    .replace(/\r\n?/g, '\n')
+    // A standalone backslash is commonly pasted as a manual paragraph separator.
+    .replace(/(?:^|\n)\s*\\\s*(?=\n|$)/g, '\n');
+  const blocks = normalizedDescription.split(/\n\s*\n+/).filter((block) => block.trim());
+
+  return (
+    <div
+      className="mb-8 max-h-48 space-y-3 overflow-y-auto pr-3 leading-relaxed"
+      style={{ color: '#75787b' }}
+      tabIndex={0}
+      aria-label={`${title} description`}
+    >
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split('\n').filter((line) => line.trim());
+
+        return (
+          <div key={blockIndex} className="space-y-1">
+            {lines.map((line, lineIndex) => {
+              const headingMatch = line.match(/^\*\*\*(.+?)\*\*\*\s*(.*)$/);
+              const bulletMatch = line.match(/^(\s*)[-*]\s+(.+)$/);
+
+              if (headingMatch) {
+                return (
+                  <div key={lineIndex} className="space-y-1">
+                    <h4 className="text-lg font-bold leading-snug" style={{ color: '#003c6c' }}>
+                      {headingMatch[1]}
+                    </h4>
+                    {headingMatch[2] && <p>{formatDescriptionInline(headingMatch[2])}</p>}
+                  </div>
+                );
+              }
+
+              if (bulletMatch) {
+                const indent = Math.floor(bulletMatch[1].length / 2);
+                return (
+                  <div key={lineIndex} className="flex gap-2" style={{ marginLeft: `${indent * 1.25}rem` }}>
+                    <span aria-hidden="true">•</span>
+                    <span>{formatDescriptionInline(bulletMatch[2])}</span>
+                  </div>
+                );
+              }
+
+              return <p key={lineIndex}>{formatDescriptionInline(line)}</p>;
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function App() {
   const [tours, setTours] = useState<Tour[]>([]);
   const navigate = useNavigate();
@@ -127,7 +195,7 @@ function App() {
             description: data.description ?? "",
             duration: data.duration ?? 0,
             durationUnit: data.durationUnit ?? "minutes",
-            maxAttendeesPerBooking: data.maxAttendees ?? 5,
+            maxAttendeesPerBooking: data.maxAttendeesPerBooking ?? data.maxAttendees ?? 5,
             maxBookings: data.maxBookings ?? 3,
             startDate: data.startDate, 
             endDate: data.endDate, 
@@ -304,9 +372,7 @@ function App() {
                     </div>
                   </div>
                   
-                  <p className="mb-8 leading-relaxed line-clamp-4" style={{ color: '#75787b' }}>
-                    {tour.description}
-                  </p>
+                  <TourDescription description={tour.description} title={tour.title} />
                   
                   <button
                     onClick={() => navigate(`/booking/${tour.tourId}`)}

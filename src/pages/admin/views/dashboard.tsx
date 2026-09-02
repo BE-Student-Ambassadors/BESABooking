@@ -1,8 +1,34 @@
 import { useState, useEffect } from 'react';
 import type { UserRole } from "../../../appTypes.d.ts";
 import { Calendar, Users, Trash2, X } from 'lucide-react';
-import { db } from '../../../../src/firebase.ts';
-import { collection, getDocs, updateDoc, doc, deleteDoc } from "firebase/firestore";
+import api from '../../../api';
+
+type DashboardResponse = {
+  stats: {
+    todaysTours: number;
+    weeklyTours: number;
+  };
+  bookings: BookingData[];
+  tours: Tour[];
+  besas: BesaData[];
+};
+
+type DashboardAssignmentsResponse = {
+  besas: BesaAssignment[];
+};
+
+const isDashboardResponse = (value: unknown): value is DashboardResponse => {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Partial<DashboardResponse>;
+  return (
+    !!data.stats &&
+    typeof data.stats.todaysTours === 'number' &&
+    typeof data.stats.weeklyTours === 'number' &&
+    Array.isArray(data.bookings) &&
+    Array.isArray(data.tours) &&
+    Array.isArray(data.besas)
+  );
+};
 
 const besaSupportsTour = (besa: Pick<BesaData, 'supportedTourIds'>, tourId?: string) => {
   if (!tourId) return true;
@@ -17,6 +43,9 @@ export default function DashboardView() {
   const [tours, setTours] = useState<Tour[]>([]);
   const [todaysTours, setTodaysTours] = useState(0);
   const [weeklyTours, setWeeklyTours] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [assigningBesas, setAssigningBesas] = useState(false);
   const [editBooking, setEditBooking] = useState<BookingData | null>(null);
   const [formData, setFormData] = useState<BookingData | null>(null);
   const [besaList, setBesaList] = useState<BesaData[]>([]);
@@ -32,139 +61,36 @@ export default function DashboardView() {
     return String(besa ?? '');
   };
 
-  const dayMapping = {
-    0: 'sunday',
-    1: 'monday',
-    2: 'tuesday',
-    3: 'wednesday',
-    4: 'thursday',
-    5: 'friday',
-    6: 'saturday'
+  const loadDashboard = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await api.get<DashboardResponse>('/api/admin/dashboard');
+      const data = response.data;
+      if (!isDashboardResponse(data)) {
+        throw new Error('Invalid dashboard response payload.');
+      }
+      setBookings(data.bookings);
+      setTours(data.tours);
+      setBesaList(data.besas);
+      setTodaysTours(data.stats.todaysTours);
+      setWeeklyTours(data.stats.weeklyTours);
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+      setBookings([]);
+      setTours([]);
+      setBesaList([]);
+      setTodaysTours(0);
+      setWeeklyTours(0);
+      const message = error instanceof Error ? error.message : 'Failed to load dashboard data.';
+      setLoadError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Fetch BESA Data
   useEffect(() => {
-    const fetchBESAs = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "Besas")); 
-        const data = snapshot.docs.map((doc) => {
-          const docData = doc.data();
-
-          const convertedOfficeHours: { [day: string]: DayHours } = {};
-          Object.entries(docData.officeHours || {}).forEach(([day, hours]) => {
-            if (
-              hours &&
-              typeof hours === 'object' &&
-              'start' in hours &&
-              'end' in hours
-            ) {
-              convertedOfficeHours[day] = {
-                available: true,
-                timeSlots: [{
-                  id: Math.random().toString(36).substr(2, 9),
-                  start: typeof (hours as any).start === 'string' ? (hours as any).start : '09:00',
-                  end: typeof (hours as any).end === 'string' ? (hours as any).end : '17:00'
-                }]
-              };
-            } else if (
-              hours &&
-              typeof hours === 'object' &&
-              'available' in hours &&
-              'timeSlots' in hours
-            ) {
-              convertedOfficeHours[day] = {
-                available: !!(hours as any).available,
-                timeSlots: Array.isArray((hours as any).timeSlots)
-                  ? (hours as any).timeSlots.map((slot: any) => ({
-                      id: typeof slot.id === 'string' ? slot.id : Math.random().toString(36).substr(2, 9),
-                      start: typeof slot.start === 'string' ? slot.start : '09:00',
-                      end: typeof slot.end === 'string' ? slot.end : '17:00'
-                    }))
-                  : []
-              };
-            } else {
-              convertedOfficeHours[day] = {
-                available: false,
-                timeSlots: []
-              };
-            }
-          });
-
-          return {
-            id: doc.id,
-            name: docData.name,
-            email: docData.email,
-            status: docData.status,
-            role: docData.role,
-            supportedTourIds: Array.isArray(docData.supportedTourIds) ? docData.supportedTourIds : [],
-            officeHours: convertedOfficeHours
-          } as BesaData;
-        });
-        setBesaList(data);
-      } catch (error) {
-        console.error("Error fetching BESAs:", error);
-      }
-    };
-
-    fetchBESAs();
-  }, []);
-
-  // Fetch Booking & Tour Data
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const toursSnap = await getDocs(collection(db, "Tours"));
-        const toursData = toursSnap.docs.map(doc => ({
-          tourId: doc.id,
-          ...doc.data(),
-        })) as Tour[];
-        setTours(toursData);
-
-        const bookingsRef = collection(db, "Bookings");
-        const snapshot = await getDocs(bookingsRef);
-        const data = snapshot.docs.map((doc) => {
-          const docData = doc.data() as any;
-          const normalizedBesas = (docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : [])).map(normalizeBesaEntry);
-
-          return {
-            ...docData,
-            bookingId: doc.id, // always prefer Firestore doc id over any stale bookingId field
-            besas: normalizedBesas
-          };
-        }) as BookingData[];
-
-        // Sort by date ascending
-        const sortedData = data.sort((a, b) => {
-          const dateA = new Date(a.date);
-          const dateB = new Date(b.date);
-          return dateA.getTime() - dateB.getTime();
-        });
-
-        setBookings(sortedData);
-
-        // Stats
-        const today = new Date();
-        const todayStr = today.toISOString().split("T")[0];
-
-        const startOfWeek = new Date(today);
-        startOfWeek.setDate(today.getDate() - today.getDay());
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-        const todayCount = data.filter((b) => b.date === todayStr).length;
-        const weekCount = data.filter((b) => {
-          const bookingDate = new Date(b.date);
-          return bookingDate >= startOfWeek && bookingDate <= endOfWeek;
-        }).length;
-
-        setTodaysTours(todayCount);
-        setWeeklyTours(weekCount);
-      } catch (error) {
-        console.error("Error fetching bookings:", error);
-      }
-    };
-
-    fetchData();
+    void loadDashboard();
   }, []);
 
   // Convert 12hr to 24hr format
@@ -248,76 +174,66 @@ export default function DashboardView() {
     return bookingDateTime.getTime() < now.getTime();
   };
 
-  // Check if a booking time falls within a BESA's availability
-  const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string) => {
-    if (!bookingDate || !bookingTime) return false;
-    const [y, m, d] = bookingDate.split('-').map(Number);
-    // Build local date so we don't roll back a day from UTC parsing
-    const date = new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
-    const dayOfWeek = date.getDay();
-    const dayKey = dayMapping[dayOfWeek as keyof typeof dayMapping];
-    const dayHours = besa.officeHours[dayKey];
-    if (!dayHours || !dayHours.available || dayHours.timeSlots.length === 0) return false;
-    const bookingTime24 = parseTime12Hour(bookingTime);
-    if (!bookingTime24) return false;
-    return dayHours.timeSlots.some(slot => {
-      return bookingTime24 >= slot.start && bookingTime24 <= slot.end;
-    });
-  };
-
-  // Get available BESAs for a specific booking
-  const getAvailableBesas = (booking: BookingData) => {
-    return besaList.filter(besa => 
-      besa.status === 'active' &&
-      besaSupportsTour(besa, booking.tourId) &&
-      isBesaAvailable(besa, booking.date, booking.startTime)
-    );
-  };
-
-  const rolePriority = (role?: string) => {
-    const normalized = (role || '').toLowerCase();
-    if (normalized === 'besa') return 0;
-    if (normalized === 'besas on-call' || normalized === 'besa on-call') return 1;
-    return 2; // BESA Lead or any other role
-  };
-
   const formatBesas = (besas?: any[]) =>
     (besas || [])
       .map(normalizeBesaEntry)
       .filter((b) => b && typeof b === 'string');
 
-  // Auto-assign all available BESAs to a booking
-  const autoAssignBesas = (bookingData: BookingData) => {
-    const availableBesas = getAvailableBesas(bookingData)
-      .slice()
-      .sort((a, b) => {
-        const priorityDiff = rolePriority(a.role) - rolePriority(b.role);
-        if (priorityDiff !== 0) return priorityDiff;
-        return (a.name || '').localeCompare(b.name || '');
-      })
-      .slice(0, 2); // cap at two assignments
+  const normalizeBesaAssignments = (besas?: Array<BesaAssignment | string>) =>
+    (besas || []).flatMap((besa) => {
+      if (typeof besa !== 'string') return [besa];
+      const match = besaList.find((entry) => entry.name === besa);
+      return match ? [{ name: match.name, email: match.email }] : [];
+    });
 
-    return {
-      ...bookingData,
-      besas: availableBesas.map(besa => besa.name)
-    };
+  const requestBesaAssignments = async (bookingData: BookingData) => {
+    if (!bookingData.date || !(bookingData.time || bookingData.startTime)) {
+      return bookingData;
+    }
+
+    setAssigningBesas(true);
+    try {
+      const response = await api.post<DashboardAssignmentsResponse>('/api/admin/bookings/assignments', {
+        bookingId: bookingData.bookingId,
+        date: bookingData.date,
+        time: bookingData.time || bookingData.startTime,
+        startTime: bookingData.time || bookingData.startTime,
+        tourId: bookingData.tourId,
+      });
+
+      return {
+        ...bookingData,
+        time: bookingData.time || bookingData.startTime,
+        startTime: bookingData.time || bookingData.startTime,
+        besas: response.data.besas,
+      };
+    } catch (error) {
+      console.error("Error assigning BESAs:", error);
+      alert("Failed to auto-assign BESAs.");
+      return bookingData;
+    } finally {
+      setAssigningBesas(false);
+    }
   };
 
   // Handle date/time changes and auto-assign BESAs
-  const handleDateTimeChange = (field: 'date' | 'time', value: string) => {
+  const handleDateTimeChange = async (field: 'date' | 'time', value: string) => {
     if (!formData) return;
-    const updatedFormData = { ...formData, [field]: value };
+    const updatedFormData = {
+      ...formData,
+      [field]: value,
+      ...(field === 'time' ? { startTime: value } : {})
+    };
+    setFormData(updatedFormData);
     if (updatedFormData.date && updatedFormData.time) {
-      const withAutoAssignedBesas = autoAssignBesas(updatedFormData);
+      const withAutoAssignedBesas = await requestBesaAssignments(updatedFormData);
       setFormData(withAutoAssignedBesas);
-    } else {
-      setFormData(updatedFormData);
     }
   };
 
   const handleEditClick = (booking: BookingData) => {
     setEditBooking(booking);
-    setFormData({ ...booking, besas: formatBesas(booking.besas) });
+    setFormData({ ...booking, besas: normalizeBesaAssignments(booking.besas) });
   };
 
   const handleDeleteClick = (booking: BookingData) => {
@@ -325,23 +241,13 @@ export default function DashboardView() {
   };
 
   const reloadBookings = async () => {
-    const bookingsRef = collection(db, "Bookings");
-    const snapshot = await getDocs(bookingsRef);
-    const data = snapshot.docs.map((doc) => {
-      const docData = doc.data() as any;
-      return {
-        ...docData,
-        bookingId: doc.id, // ensure we always use the Firestore doc id
-        besas: formatBesas(docData?.besas ? docData.besas : (docData?.besa ? [docData.besa] : []))
-      };
-    }) as BookingData[];
-    setBookings(data);
+    await loadDashboard();
   };
 
   const confirmDelete = async () => {
     if (!deleteBooking || !deleteBooking.bookingId) return;
     try {
-      await deleteDoc(doc(db, "Bookings", deleteBooking.bookingId));
+      await api.delete(`/api/admin/bookings/${deleteBooking.bookingId}`);
       await reloadBookings();
       setDeleteBooking(null);
       alert("Booking deleted successfully!");
@@ -356,10 +262,10 @@ export default function DashboardView() {
     try {
       const saveData = {
         ...formData,
-        besas: formData.besas?.filter(besa => besa.trim() !== '') || []
+        besas: normalizeBesaAssignments(formData.besas),
       };
       if (!formData.bookingId) throw new Error("Missing bookingId on formData");
-      await updateDoc(doc(db, "Bookings", formData.bookingId), saveData as any);
+      await api.patch(`/api/admin/bookings/${formData.bookingId}`, saveData);
       setEditBooking(null);
       await reloadBookings();
       alert("Booking updated successfully!");
@@ -401,14 +307,20 @@ export default function DashboardView() {
   // };
 
   // Reassign BESAs based on current date/time
-  const reassignBesas = () => {
+  const reassignBesas = async () => {
     if (!formData) return;
-    const withAutoAssignedBesas = autoAssignBesas(formData);
+    const withAutoAssignedBesas = await requestBesaAssignments(formData);
     setFormData(withAutoAssignedBesas);
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {loadError && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {loadError}
+        </div>
+      )}
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           {currentRole === 'admin' ? 'Admin Dashboard' : 'BESA Dashboard'}
@@ -427,7 +339,7 @@ export default function DashboardView() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Today's Tours</p>
-              <p className="text-3xl font-bold text-gray-900">{todaysTours}</p>
+              <p className="text-3xl font-bold text-gray-900">{loading ? '...' : todaysTours}</p>
             </div>
             <div className="bg-blue-100 p-3 rounded-lg">
               <Calendar className="h-6 w-6 text-blue-600" />
@@ -439,7 +351,7 @@ export default function DashboardView() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">This Week</p>
-              <p className="text-3xl font-bold text-gray-900">{weeklyTours}</p>
+              <p className="text-3xl font-bold text-gray-900">{loading ? '...' : weeklyTours}</p>
             </div>
             <div className="bg-green-100 p-3 rounded-lg">
               <Users className="h-6 w-6 text-green-600" />
@@ -914,8 +826,16 @@ export default function DashboardView() {
                     value=""
                     onChange={(e) => {
                       if (e.target.value) {
-                        const newBesas = [...(formData.besas || []), e.target.value];
-                        setFormData({ ...formData, besas: newBesas });
+                        const selectedBesa = besaList.find((besa) => besa.id === e.target.value);
+                        if (selectedBesa) {
+                          setFormData({
+                            ...formData,
+                            besas: [
+                              ...(formData.besas || []),
+                              { name: selectedBesa.name, email: selectedBesa.email },
+                            ],
+                          });
+                        }
                         (e.target as HTMLSelectElement).value = ""; // Reset selection
                       }
                     }}
@@ -923,9 +843,11 @@ export default function DashboardView() {
                   >
                     <option value="">Add BESA manually...</option>
                     {besaList
-                      .filter(b => b.status === 'active' && !formData.besas?.includes(b.name))
+                      .filter(b => b.status === 'active' && !formData.besas?.some((assigned) =>
+                        typeof assigned === 'object' && assigned.name === b.name
+                      ))
                       .map((besa) => (
-                        <option key={besa.id} value={besa.name}>
+                        <option key={besa.id} value={besa.id}>
                           {besa.name}
                         </option>
                       ))

@@ -1,6 +1,6 @@
 # Firestore Data Model
 
-The app reads/writes Firestore directly from the React client (no Cloud Functions). 
+The project still uses Firestore as the main data store, but admin-page reads/writes are now routed through the Express backend. Public booking flows still include direct client-side Firestore usage.
 
 Core collections:
 
@@ -50,5 +50,6 @@ Core collections:
 ## Tips for Changes
 - When adding new fields, update:
   1) Type definitions (`src/types/global.d.ts`)
-  2) Firestore write locations (e.g., `toursManagement.tsx`, booking flows)
-  3) Any stats/derived calculations (dashboard, schedule)
+  2) Backend repository/service/controller layers for admin-owned flows
+  3) Public booking Firestore write locations where applicable
+  4) Any stats/derived calculations (dashboard, schedule, BESA rollups)

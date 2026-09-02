@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft, Loader2, Save } from "lucide-react";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
-import { BookingDoc } from "./ModifyBookings.tsx";
+import api from "../api.ts";
+import type { BookingDoc } from "./ModifyBookings.tsx";
 
 type BookingRecord = {
   tourId?: string;
@@ -351,6 +352,79 @@ function toLocalISO(dt: Date): string {
   );
 }
 
+function formatDescriptionInline(text: string) {
+  return text.split(/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, index) => {
+    if (part.startsWith('***') && part.endsWith('***')) {
+      return <strong key={index}>{part.slice(3, -3)}</strong>;
+    }
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+    return part;
+  });
+}
+
+function FormattedTourDescription({
+  description,
+  title,
+  compact = false,
+}: {
+  description: string;
+  title: string;
+  compact?: boolean;
+}) {
+  const normalizedDescription = description
+    .replace(/\r\n?/g, '\n')
+    // A standalone backslash is commonly pasted as a manual paragraph separator.
+    .replace(/(?:^|\n)\s*\\\s*(?=\n|$)/g, '\n');
+  const blocks = normalizedDescription.split(/\n\s*\n+/).filter((block) => block.trim());
+
+  return (
+    <div
+      className={`mb-4 space-y-3 overflow-y-auto pr-3 text-sm leading-relaxed text-gray-600 ${compact ? 'max-h-32' : 'max-h-48'}`}
+      tabIndex={0}
+      aria-label={`${title} description`}
+    >
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split('\n').filter((line) => line.trim());
+
+        return (
+          <div key={blockIndex} className="space-y-1">
+            {lines.map((line, lineIndex) => {
+              const headingMatch = line.match(/^\*\*\*(.+?)\*\*\*\s*(.*)$/);
+              const bulletMatch = line.match(/^(\s*)[-*]\s+(.+)$/);
+
+              if (headingMatch) {
+                return (
+                  <div key={lineIndex} className="space-y-1">
+                    <h4 className="text-base font-bold leading-snug text-indigo-700">{headingMatch[1]}</h4>
+                    {headingMatch[2] && <p>{formatDescriptionInline(headingMatch[2])}</p>}
+                  </div>
+                );
+              }
+
+              if (bulletMatch) {
+                const indent = Math.floor(bulletMatch[1].length / 2);
+                return (
+                  <div key={lineIndex} className="flex gap-2" style={{ marginLeft: `${indent * 1.25}rem` }}>
+                    <span aria-hidden="true">•</span>
+                    <span>{formatDescriptionInline(bulletMatch[2])}</span>
+                  </div>
+                );
+              }
+
+              return <p key={lineIndex}>{formatDescriptionInline(line)}</p>;
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function BookingPage() {
   const [tours, setTours] = useState<Tour[]>([]);
   const navigate = useNavigate();
@@ -368,7 +442,9 @@ function BookingPage() {
             description: data.description ?? "",
             duration: data.duration ?? 0,
             durationUnit: data.durationUnit ?? "minutes",
-            maxAttendeesPerBooking: data.maxAttendees ?? 5,
+            maxAttendeesPerBooking: data.maxAttendeesPerBooking ?? data.maxAttendees ?? 5,
+            bookingNotice: data.bookingNotice ?? "",
+            bannerImageUrl: data.bannerImageUrl ?? "",
             maxBookings: data.maxBookings ?? 3,
             startDate: data.startDate, // ← Add this
             endDate: data.endDate, // ← Add this
@@ -469,93 +545,6 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [besas, setBesas] = useState<BesaData[]>([]);
-
-  // --- Add bookings state and fetch logic ---
-  const [bookings, setBookings] = useState<BookingRecord[]>([]);
-
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "Bookings"));
-        const bookingsData = querySnapshot.docs.map((doc) => doc.data());
-        setBookings(bookingsData);
-      } catch (error) {
-        console.error("Error fetching bookings:", error);
-      }
-    };
-    fetchBookings();
-  }, []);
-
-  // Fetch BESA availability for auto-assignment
-  useEffect(() => {
-    const normalizeOfficeHours = (officeHours: any = {}): Record<string, DayHours> => {
-      const converted: Record<string, DayHours> = {};
-      Object.entries(officeHours).forEach(([day, hours]) => {
-        if (
-          hours &&
-          typeof hours === "object" &&
-          "start" in hours &&
-          "end" in hours
-        ) {
-          converted[day] = {
-            available: true,
-            timeSlots: [
-              {
-                id: Math.random().toString(36).substr(2, 9),
-                start: typeof (hours as any).start === "string" ? (hours as any).start : "09:00",
-                end: typeof (hours as any).end === "string" ? (hours as any).end : "17:00",
-              },
-            ],
-          };
-        } else if (
-          hours &&
-          typeof hours === "object" &&
-          "available" in hours &&
-          "timeSlots" in hours
-        ) {
-          converted[day] = {
-            available: !!(hours as any).available,
-            timeSlots: Array.isArray((hours as any).timeSlots)
-              ? (hours as any).timeSlots.map((slot: any) => ({
-                id: typeof slot.id === "string" ? slot.id : Math.random().toString(36).substr(2, 9),
-                start: typeof slot.start === "string" ? slot.start : "09:00",
-                end: typeof slot.end === "string" ? slot.end : "17:00",
-              }))
-              : [],
-          };
-        } else {
-          converted[day] = {
-            available: false,
-            timeSlots: [],
-          };
-        }
-      });
-      return converted;
-    };
-
-    const fetchBesas = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, "Besas"));
-        const data = snapshot.docs.map((besaDoc) => {
-          const docData = besaDoc.data() as any;
-          return {
-            id: besaDoc.id,
-            name: docData.name,
-            email: docData.email,
-            status: docData.status,
-            role: docData.role,
-            supportedTourIds: Array.isArray(docData.supportedTourIds) ? docData.supportedTourIds : [],
-            officeHours: normalizeOfficeHours(docData.officeHours || {}),
-          } as BesaData;
-        });
-        setBesas(data);
-      } catch (error) {
-        console.error("Error fetching BESAs for auto-assignment:", error);
-      }
-    };
-
-    fetchBesas();
-  }, []);
 
   const sections = [
     { id: 1, title: "Date & Type of Tour", description: "Choose your preferred tour and date" },
@@ -693,6 +682,45 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   ) => {
     if (rules.blockedTimes.has(slotStartMinutes)) return true;
     return rules.blockedRanges.some((range) => slotStartMinutes < range.end && range.start < slotEndMinutes);
+  };
+
+  const getAvailableTimesForDate = (dateStr: string, tour: Tour) => {
+    if (!dateStr || !isDateAvailable(dateStr, tour).available) return [];
+
+    const durationMinutes =
+      tour.durationUnit === "hours" || tour.durationUnit === "hour"
+        ? tour.duration * 60
+        : tour.duration;
+    const frequencyMinutes =
+      tour.frequencyUnit === "hours" || tour.frequencyUnit === "hour"
+        ? tour.frequency * 60
+        : tour.frequency;
+
+    if (durationMinutes <= 0 || frequencyMinutes <= 0) return [];
+
+    const override = findDateOverride(dateStr, tour);
+    const dayName = new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-US", { weekday: "long" });
+    const matchingRange = getMatchingAvailabilityRange(dateStr, tour);
+    const hours = override?.slots?.length
+      ? override.slots
+      : matchingRange?.weeklyHours?.[dayName] || tour.weeklyHours?.[dayName] || [];
+    const blockedRules = getBlockedSlotRules(dateStr, tour);
+    const minimumStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    return hours.flatMap((slot) => generateTimeSlots(slot.start, slot.end, durationMinutes, frequencyMinutes))
+      .filter((time) => {
+        const slotStart = getMinutesFromLabel(time);
+        if (slotStart === null || isSlotBlocked(slotStart, slotStart + durationMinutes, blockedRules)) {
+          return false;
+        }
+
+        const [timePart, meridiem] = time.split(" ");
+        const [hour, minute] = timePart.split(":").map(Number);
+        const hour24 = meridiem === "PM" && hour !== 12 ? hour + 12 : meridiem === "AM" && hour === 12 ? 0 : hour;
+        const slotDateTime = new Date(`${dateStr}T00:00:00`);
+        slotDateTime.setHours(hour24, minute, 0, 0);
+        return slotDateTime >= minimumStart;
+      });
   };
 
   const parseTime12Hour = (time12: string) => {
@@ -915,93 +943,87 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     if (isSubmitting) return;
     if (!validateSection(currentSection)) return;
     setIsSubmitting(true);
-    
+
     try {
-        const selected = tours.find((t) => t.tourId === bookingData.tourId);
-        if (!selected) throw new Error("Selected tour not found.");
-  
-        const durationMins =
-          selected.durationUnit === "hours" || selected.durationUnit === "hour"
-            ? selected.duration * 60
-            : selected.duration;
-  
-        if (!bookingData.date || !bookingData.startTime) {
-          throw new Error("Missing date or time.");
-        }
-  
-        const startLocal = parseLocalDateTime(
-          bookingData.date,
-          bookingData.startTime
-        );
-        const endLocal = addMinutes(startLocal, durationMins);
-  
-        const bookingsRef = collection(db, "Bookings");
-        const newDocRef = doc(bookingsRef);
-        const bookingId = newDocRef.id;
-  
-        const updatedBookingData = {
-          ...bookingData,
-          bookingId,
-          time: bookingData.startTime,
-          endTime: endLocal.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-          }),
-          startTimeISO: toLocalISO(startLocal),
-          endTimeISO: toLocalISO(endLocal),
-          location: selected.location || "Not specified",
-        };
-  
-        const autoAssignedBesas = getAutoAssignedBesas(
-          updatedBookingData.tourId || "",
-          updatedBookingData.date || "",
-          updatedBookingData.startTime || "",
-          durationMins
-        );
-  
-        let bookingPayload: BookingDoc & { id?: string; createdAt?: string } = {
+      const selected = tours.find((t) => t.tourId === bookingData.tourId);
+      if (!selected) throw new Error("Selected tour not found.");
+
+      const durationMins =
+        selected.durationUnit === "hours" || selected.durationUnit === "hour"
+          ? selected.duration * 60
+          : selected.duration;
+
+      if (!bookingData.date || !bookingData.startTime) {
+        throw new Error("Missing date or time.");
+      }
+
+      const startLocal = parseLocalDateTime(
+        bookingData.date,
+        bookingData.startTime
+      );
+      const endLocal = addMinutes(startLocal, durationMins);
+
+      const updatedBookingData = {
+        ...bookingData,
+        bookingId: bookingData.bookingId || "",
+        time: bookingData.startTime,
+        endTime: endLocal.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        startTimeISO: toLocalISO(startLocal),
+        endTimeISO: toLocalISO(endLocal),
+        location: selected.location || "Not specified",
+      };
+
+      if (onSubmit) {
+        await onSubmit({
           ...updatedBookingData,
-          besas: autoAssignedBesas,
           accommodations: updatedBookingData.accommodations || "",
           largeTourDetails: updatedBookingData.largeTourDetails || "",
-        };
+        });
+        return;
+      }
 
-        if (onSubmit) {
-          await onSubmit(bookingPayload)
-        } else {
-          bookingPayload.id = bookingId
-          bookingPayload.createdAt = new Date().toISOString()
-          await setDoc(newDocRef, bookingPayload);
-          console.log("Booking saved to Firestore with auto-assigned BESAs", bookingPayload);
-    
-          const confirmationData = {
-            id: bookingId,
-            tourTitle: selected.title,
-            date: bookingPayload.date,
-            time: bookingPayload.time || bookingPayload.startTime,
-            startTime: bookingPayload.startTime,
-            endTime: bookingPayload.endTime,
-            duration: selected.duration,
-            durationUnit: selected.durationUnit,
-            groupSize: bookingPayload.maxAttendees,
-            firstName: bookingPayload.firstName,
-            lastName: bookingPayload.lastName,
-            email: bookingPayload.email,
-            phone: bookingPayload.phone,
-            organization: bookingPayload.organization,
-            role: bookingPayload.role,
-            accommodations: bookingPayload.accommodations,
-            location: selected.location,
-            zoomLink: selected.zoomLink,
-            calendarEventLink: "",
-            createdAt: new Date().toISOString(),
-          };
-    
-          navigate("/booking-confirmation", {
-            state: { bookingData: confirmationData },
-            replace: true,
-          });
-        }
+      const bookingPayload = {
+        ...updatedBookingData,
+        accommodations: updatedBookingData.accommodations || (updatedBookingData as any).accommodations || "",
+        largeTourDetails: updatedBookingData.largeTourDetails || "",
+        createdAt: new Date().toISOString(),
+      };
+
+      const response = await api.post("/api/bookings", bookingPayload);
+      const savedBooking = response.data as BookingData;
+      const bookingId = savedBooking.bookingId;
+      console.log("Booking saved with backend-assigned BESAs", savedBooking);
+
+      const confirmationData = {
+        id: bookingId,
+        tourTitle: selected.title,
+        date: savedBooking.date,
+        time: savedBooking.time || savedBooking.startTime,
+        startTime: savedBooking.startTime,
+        endTime: savedBooking.endTime,
+        duration: selected.duration,
+        durationUnit: selected.durationUnit,
+        groupSize: savedBooking.maxAttendees,
+        firstName: savedBooking.firstName,
+        lastName: savedBooking.lastName,
+        email: savedBooking.email,
+        phone: savedBooking.phone,
+        organization: savedBooking.organization,
+        role: savedBooking.role,
+        accommodations: savedBooking.accommodations,
+        location: selected.location,
+        zoomLink: selected.zoomLink,
+        calendarEventLink: "",
+        createdAt: new Date().toISOString(),
+      };
+
+      navigate("/booking-confirmation", {
+        state: { bookingData: confirmationData },
+        replace: true,
+      });
     } catch (error) {
       console.error("Error during submission:", error);
       alert("Failed to submit booking. Please try again.");
@@ -1010,63 +1032,59 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     }
   };
 
-
-  // ---------- Renderers for Sections ----------
-  const renderSectionIndicator = () => {
-    const progressPct = (currentSection / sections.length) * 100;
-    return (
-      <>
-        {/* Mobile: compact pill + progress bar */}
-        <div className="sm:hidden mb-6 px-1">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-blue-700">
-              Step {currentSection} of {sections.length}
-            </span>
-            <span className="text-xs text-gray-500">
-              {sections.find(s => s.id === currentSection)?.title}
-            </span>
-          </div>
-          <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
-            <div
-              className="h-full bg-blue-600 transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
+const renderSectionIndicator = () => {
+  const progressPct = (currentSection / sections.length) * 100;
+  return (
+    <>
+      <div className="sm:hidden mb-6 px-1">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-blue-700">
+            Step {currentSection} of {sections.length}
+          </span>
+          <span className="text-xs text-gray-500">
+            {sections.find(s => s.id === currentSection)?.title}
+          </span>
         </div>
+        <div className="w-full h-2 rounded-full bg-gray-200 overflow-hidden">
+          <div
+            className="h-full bg-blue-600 transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
 
-        {/* Desktop: full stepper */}
-        <div className="hidden sm:flex items-start justify-start sm:justify-center mb-8 overflow-x-auto gap-4 py-2 px-1 -mx-1">
-          {sections.map((section, index) => (
-            <div key={section.id} className="flex items-center">
-              <div className="text-center flex flex-col items-center">
-                <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-medium mb-2 ${section.id <= currentSection ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
+      <div className="hidden sm:flex items-start justify-start sm:justify-center mb-8 overflow-x-auto gap-4 py-2 px-1 -mx-1">
+        {sections.map((section, index) => (
+          <div key={section.id} className="flex items-center">
+            <div className="text-center flex flex-col items-center">
+              <div
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-medium mb-2 ${section.id <= currentSection ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
+                  }`}
+              >
+                {section.id < currentSection ? <Check className="w-6 h-6" /> : section.id}
+              </div>
+              <div className="text-center w-32">
+                <p
+                  className={`text-sm font-medium ${section.id <= currentSection ? "text-blue-600" : "text-gray-500"
                     }`}
                 >
-                  {section.id < currentSection ? <Check className="w-6 h-6" /> : section.id}
-                </div>
-                <div className="text-center max-w-32">
-                  <p
-                    className={`text-sm font-medium ${section.id <= currentSection ? "text-blue-600" : "text-gray-500"
-                      }`}
-                  >
-                    {section.title}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">{section.description}</p>
-                </div>
+                  {section.title}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">{section.description}</p>
               </div>
-              {index < sections.length - 1 && (
-                <div
-                  className={`w-20 h-1 mx-4 mt-6 flex-shrink-0 ${section.id < currentSection ? "bg-blue-600" : "bg-gray-200"
-                    }`}
-                />
-              )}
             </div>
-          ))}
-        </div>
-      </>
-    );
-  };
+            {index < sections.length - 1 && (
+              <div
+                className={`w-20 h-1 mx-4 mt-6 flex-shrink-0 ${section.id < currentSection ? "bg-blue-600" : "bg-gray-200"
+                  }`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+};
 
   const renderSection1 = () => {
     const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
@@ -1219,14 +1237,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         if (slotDateTime < minDateTime) return false;
 
         // Check if slot is not full
-        const bookingCount = bookings.filter((booking) =>
-          booking.tourId === selectedTourData.tourId &&
-          booking.date === dateStr &&
-          getBookingTime(booking) === time
-        ).length;
-        const maxBookings = selectedTourData.maxBookings || 1;
-
-        return bookingCount < maxBookings;
+        return true;
       });
     };
 
@@ -1240,17 +1251,28 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
     return (
       <div className="space-y-6">
-
         <div>
           <div className="grid gap-6">
             {selectedTour ? (
               // Show only the selected tour
               selectedTourData && (
                 <div className="tour-card selected">
+                  {selectedTourData.bannerImageUrl?.trim() && (
+                    <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-sm">
+                      <img
+                        src={selectedTourData.bannerImageUrl}
+                        alt={`${selectedTourData.title} banner`}
+                        className="block h-auto w-full"
+                      />
+                    </div>
+                  )}
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-indigo-600 mb-2">{selectedTourData.title}</h3>
-                      <p className="text-gray-600 text-sm mb-4">{selectedTourData.description}</p>
+                      <FormattedTourDescription
+                        description={selectedTourData.description}
+                        title={selectedTourData.title}
+                      />
                       <div className="text-sm text-gray-700 space-y-1">
                         <span className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
@@ -1279,7 +1301,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
               tours.map((tour) => (
                 <div key={tour.tourId} className="tour-card">
                   <h3 className="text-lg font-semibold text-indigo-600 mb-2">{tour.title}</h3>
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-3">{tour.description}</p>
+                  <FormattedTourDescription description={tour.description} title={tour.title} compact />
                   <div className="text-sm text-gray-700 space-y-1">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
@@ -1307,6 +1329,13 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
             <AlertCircle className="w-4 w-4" />
             {errors.tourType}
           </p>
+        )}
+
+        {selectedTourData?.bookingNotice?.trim() && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+            <p className="font-semibold">Before you book</p>
+            <p className="mt-1 whitespace-pre-line leading-6">{selectedTourData.bookingNotice.trim()}</p>
+          </div>
         )}
 
         <div>
@@ -1377,209 +1406,52 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
   // Replace the renderSection2 function with this updated version:
 
-  const renderSection2 = () => {
-    const selected = tours.find((t) => t.tourId === bookingData.tourId);
-    if (!selected) return null;
+const renderSection2 = () => {
+  const selected = tours.find((t) => t.tourId === bookingData.tourId);
+  if (!selected) return null;
 
-    // Convert duration to minutes - handles both "hour" and "hours"
-    const durationMins =
-      selected.durationUnit === "hours" || selected.durationUnit === "hour"
-        ? selected.duration * 60
-        : selected.duration;
+  const availableTimes = getAvailableTimesForDate(bookingData.date, selected);
 
-    // Convert frequency to minutes - handles both "hour" and "hours"
-    const frequencyMins =
-      selected.frequencyUnit === "hours" || selected.frequencyUnit === "hour"
-        ? selected.frequency * 60
-        : selected.frequency;
+  const updateGroupSize = (newSize: number) => {
+    const maxSize = selected.maxAttendeesPerBooking || 15;
+    const finalSize = Math.min(Math.max(1, newSize), maxSize);
+    updateBookingData("maxAttendees", finalSize);
+  };
 
-    // Calculate minimum allowed datetime (24 hours from now)
-    const getMinDateTime = () => {
-      const now = new Date();
-      const minDateTime = new Date(now);
-      minDateTime.setHours(minDateTime.getHours() + 24); // Always 24 hours ahead
-      return minDateTime;
-    };
+  const handleGroupSizeInput = (value: string) => {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) {
+      updateBookingData("maxAttendees", 1);
+      return;
+    }
+    updateGroupSize(parsed);
+  };
 
-    // Check if a specific time slot meets 24-hour minimum notice requirement
-    const isTimeSlotValid = (time: string) => {
-      const minDateTime = getMinDateTime();
-      const [timePart, period] = time.split(' ');
-      const [hours, minutes] = timePart.split(':').map(Number);
-
-      let hour24 = hours;
-      if (period === 'PM' && hours !== 12) hour24 += 12;
-      if (period === 'AM' && hours === 12) hour24 = 0;
-
-      const slotDateTime = new Date(bookingData.date + 'T00:00:00');
-      slotDateTime.setHours(hour24, minutes, 0, 0);
-
-      return slotDateTime >= minDateTime;
-    };
-
-    // Count bookings for a specific date and time
-    const getBookingCount = (date: string, time: string): number =>
-      bookings.filter((booking) =>
-        booking.tourId === selected.tourId &&
-        booking.date === date &&
-        getBookingTime(booking) === time
-      ).length;
-
-    // Check if a time slot is full
-    const isTimeSlotFull = (time: string): boolean => {
-      const date = bookingData.date;
-      if (!date) return false;
-
-      const bookingCount = getBookingCount(date, time);
-      const maxBookings = selected.maxBookings || 1;
-
-      return bookingCount >= maxBookings;
-    };
-
-    // Block slots if another tour type overlaps the selected slot window
-    const hasCrossTourConflict = (date: string, time: string): boolean => {
-      const candidateStart = getMinutesFromLabel(time);
-      if (candidateStart === null) return false;
-      const candidateEnd = candidateStart + durationMins;
-
-      return bookings.some((booking) => {
-        if (booking.date !== date) return false;
-        if (!booking.time && !booking.startTime) return false;
-        const bookingLabel = booking.time || booking.startTime;
-        const bookingStart = getMinutesFromLabel(bookingLabel);
-        if (bookingStart === null) return false;
-
-        // Prefer explicit end time; otherwise assume 60-minute block
-        const bookingEnd =
-          getMinutesFromLabel(booking.endTime) ??
-          bookingStart + 60;
-
-        const overlaps = candidateStart < bookingEnd && bookingStart < candidateEnd;
-        return booking.tourId !== selected.tourId && overlaps;
-      });
-    };
-
-    const getAvailableTimes = () => {
-      const date = bookingData.date;
-      if (!date) return [];
-
-      console.log("Selected date:", date);
-      console.log("Tour weeklyHours:", selected.weeklyHours);
-
-      // Check for date-specific hours first
-      const dateSpecific = findDateOverride(date, selected);
-
-      let allTimeSlots: string[] = [];
-
-      if (dateSpecific?.slots?.length) {
-        console.log("Using date-specific slots:", dateSpecific.slots);
-        allTimeSlots = dateSpecific.slots.flatMap((slot) =>
-          generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
-        );
-      } else {
-        const dateObj = new Date(date + 'T00:00:00');
-        const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "long" });
-        console.log("Day of week:", dayOfWeek);
-        const matchingRange = getMatchingAvailabilityRange(date, selected);
-        const weekly = matchingRange?.weeklyHours?.[dayOfWeek] || selected.weeklyHours?.[dayOfWeek];
-        console.log("Weekly hours for", dayOfWeek, ":", weekly);
-
-        if (weekly && weekly.length > 0) {
-          allTimeSlots = weekly.flatMap((slot) =>
-            generateTimeSlots(slot.start, slot.end, durationMins, frequencyMins)
-          );
-          console.log("Generated time slots:", allTimeSlots);
-        }
-      }
-
-      const hasCoverage = (time: string) => {
-        // require at least one active BESA whose office hours cover the entire tour duration
-        return besas.some(
-          (besa) =>
-            besa.status === "active" &&
-            besaSupportsTour(besa, selected.tourId) &&
-            isBesaAvailable(besa, date, time, durationMins)
-        );
-      };
-
-      const blockedSlotRules = getBlockedSlotRules(date, selected);
-
-      const availableSlots = allTimeSlots.filter(time =>
-        !isSlotBlocked(
-          getMinutesFromLabel(time) ?? -1,
-          (getMinutesFromLabel(time) ?? -1) + durationMins,
-          blockedSlotRules
-        ) &&
-        hasCoverage(time) &&
-        !isTimeSlotFull(time) &&
-        isTimeSlotValid(time) &&
-        !hasCrossTourConflict(date, time)
-      );
-      console.log("Available (non-full, valid notice) slots:", availableSlots);
-
-      return availableSlots;
-    };
-
-    const availableTimes = getAvailableTimes();
-
-    const updateGroupSize = (newSize: number) => {
-      const maxSize = selected.maxAttendeesPerBooking || 15;
-      const finalSize = Math.min(Math.max(1, newSize), maxSize);
-      updateBookingData("maxAttendees", finalSize);
-    };
-
-    const handleGroupSizeInput = (value: string) => {
-      // Allow quick manual entry for large groups while keeping limits
-      const parsed = parseInt(value, 10);
-      if (Number.isNaN(parsed)) {
-        updateBookingData("maxAttendees", 1);
-        return;
-      }
-      updateGroupSize(parsed);
-    };
-
-    // Get remaining spots for display (optional)
-    const getRemainingSpots = (time: string) => {
-      const date = bookingData.date;
-      if (!date) return selected.maxBookings || 1;
-
-      const bookingCount = getBookingCount(date, time);
-      const maxBookings = selected.maxBookings || 1;
-
-      return Math.max(0, maxBookings - bookingCount);
-    };
-
-    return (
-      <div className="space-y-8">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Your Time Slot</h2>
-          <p className="text-gray-600">Choose from available times for your selected tour</p>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="p-2 bg-blue-600 rounded-lg">
-              <Calendar className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="font-medium text-blue-900">{selected.title}</p>
-              <p className="text-blue-700 text-sm">
-                {bookingData.date} • {selected.duration} {selected.durationUnit}
-              </p>
-            </div>
+  return (
+    <div className="space-y-8">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Your Time Slot</h2>
+        <p className="text-gray-600">Choose from available times for your selected tour</p>
+      </div>
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="p-2 bg-blue-600 rounded-lg">
+            <Calendar className="w-5 h-5 text-white" />
           </div>
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Time Slots</h3>
-          <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-            <p>
-              Each time slot reserves one family. You can include up to 5 family members in a single booking.
-            </p>
-          </div>
+          {selected.maxAttendeesPerBooking >= 5 && (
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <p>
+                Each time slot reserves one family. You can include up to 5 family members in a single booking.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             {availableTimes.length > 0 ? (
               availableTimes.map((time) => {
-                const remainingSpots = getRemainingSpots(time);
                 return (
                   <button
                     key={time}
@@ -1594,11 +1466,6 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
                   >
                     <Clock className="w-4 h-4 mx-auto mb-2 text-gray-600" />
                     <span className="font-medium block">{time}</span>
-                    {remainingSpots <= 3 && (
-                      <span className="text-xs text-orange-600 mt-1 block">
-                        {remainingSpots} spot{remainingSpots !== 1 ? 's' : ''} left
-                      </span>
-                    )}
                   </button>
                 );
               })
@@ -1610,32 +1477,31 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
           </div>
           {errors.time && <p className="text-red-500 text-sm mt-2">{errors.time}</p>}
         </div>
-
-        {/* Group Size Selection */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Size</h3>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-            <input
-              type="number"
-              min={1}
-              max={selected.maxAttendeesPerBooking || 15}
-              value={bookingData.maxAttendees}
-              onChange={(e) => handleGroupSizeInput(e.target.value)}
-              className="w-full sm:w-48 px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg text-center"
-              inputMode="numeric"
-            />
-            <div className="text-sm text-gray-600">
-              <p className="font-medium">Enter the total number of attendees.</p>
-              <p>Maximum of {selected.maxAttendeesPerBooking} attendees per tour.</p>
-            </div>
-          </div>
-          {errors.maxAttendees && (
-            <p className="text-red-500 text-sm mt-2 text-left">{errors.maxAttendees}</p>
-          )}
-        </div>
       </div>
-    );
-  };
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Group Size</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <input
+            type="number"
+            min={1}
+            max={selected.maxAttendeesPerBooking || 15}
+            value={bookingData.maxAttendees}
+            onChange={(e) => handleGroupSizeInput(e.target.value)}
+            className="w-full sm:w-48 px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg text-center"
+            inputMode="numeric"
+          />
+          <div className="text-sm text-gray-600">
+            <p className="font-medium">Enter the total number of attendees.</p>
+            <p>Maximum of {selected.maxAttendeesPerBooking} attendees per tour.</p>
+          </div>
+        </div>
+        {errors.maxAttendees && (
+          <p className="text-red-500 text-sm mt-2 text-left">{errors.maxAttendees}</p>
+        )}
+      </div>
+    </div>
+  );
+};
 
   const renderSection3 = () => {
     const majorInterests = [
@@ -1880,7 +1746,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      { onBack ? 
+      {onBack ? (
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1898,7 +1764,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
           </div>
         </div>
       </div>
-      : <></>}
+      ) : <></>}
       {/* Main Content */}
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8">

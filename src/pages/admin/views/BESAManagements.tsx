@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, User, Save, Calendar, Clock, Users, MapPin } from 'lucide-react';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../../../src/firebase.ts';
+import api from '../../../api';
 // import { mockBesas } from '../../../../data/mockData.ts';
 
 type RoleType = 'BESA' | 'BESA Lead' | 'BESAs On-Call';
@@ -59,6 +58,12 @@ export default function BESAManagementView() {
     status: 'active',
   });
 
+  type BesaManagementResponse = {
+    besas: BesaType[];
+    bookings: BookingData[];
+    tours: TourOption[];
+  };
+
   const getRoleBadgeClass = (role: string) => {
     switch (role) {
       case 'BESA Lead':
@@ -75,74 +80,12 @@ export default function BESAManagementView() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch BESAs
-        const besaSnapshot = await getDocs(collection(db, "Besas"));
-        const besasData = besaSnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name,
-            email: data.email,
-            role: data.role,
-            status: data.status,
-            supportedTourIds: Array.isArray(data.supportedTourIds) ? data.supportedTourIds : [],
-            toursThisWeek: 0, 
-            totalTours: 0, 
-          } as BesaType;
-        });
-
-        const toursSnapshot = await getDocs(collection(db, "Tours"));
-        const toursData = toursSnapshot.docs.map((tourDoc) => {
-          const data = tourDoc.data() as any;
-          return {
-            id: tourDoc.id,
-            title: typeof data.title === 'string' ? data.title : 'Untitled Tour',
-          };
-        });
-        setTours(toursData);
-
-        // Fetch Bookings
-        const bookingSnapshot = await getDocs(collection(db, "Bookings"));
-        const bookingsData = bookingSnapshot.docs.map(doc => {
-          const docData = doc.data();
-          return {
-            id: doc.id,
-            ...docData,
-            // Handle backward compatibility - convert single besa to array
-            besas: docData.besas ? docData.besas : (docData.besa ? [docData.besa] : [])
-          };
-        }) as BookingData[];
-
-        setBookings(bookingsData);
-
-        // Calculate tour counts for each BESA
-        const updatedBesas = besasData.map(besa => {
-          const besaTours = bookingsData.filter(booking => 
-            booking.besas?.includes(besa.name) || booking.besa === besa.name
-          );
-
-          // Calculate this week's tours
-          const today = new Date();
-          const startOfWeek = new Date(today);
-          startOfWeek.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
-          const endOfWeek = new Date(startOfWeek);
-          endOfWeek.setDate(startOfWeek.getDate() + 6); // End of week (Saturday)
-
-          const toursThisWeek = besaTours.filter(booking => {
-            const bookingDate = new Date(booking.date);
-            return bookingDate >= startOfWeek && bookingDate <= endOfWeek;
-          }).length;
-
-          return {
-            ...besa,
-            toursThisWeek,
-            totalTours: besaTours.length
-          };
-        });
-
-        setBesas(updatedBesas);
+        const response = await api.get<BesaManagementResponse>('/api/admin/besas');
+        setBesas(response.data.besas);
+        setBookings(response.data.bookings);
+        setTours(response.data.tours);
       } catch (error) {
-        console.error("Error fetching data from Firestore:", error);
+        console.error("Error fetching BESA management data:", error);
       }
     };
 
@@ -173,13 +116,13 @@ export default function BESAManagementView() {
     e.preventDefault();
 
     try {
-      const docRef = await addDoc(collection(db, 'Besas'), {
+      const response = await api.post('/api/besas', {
         ...newBesa,
         officeHours: defaultOfficeHours,
       });
       
       setBesas(prev => [...prev, { 
-        id: docRef.id, 
+        ...(response.data as BesaType),
         ...newBesa, 
         toursThisWeek: 0, 
         totalTours: 0 
@@ -209,15 +152,15 @@ export default function BESAManagementView() {
       const besaToUpdate = besas.find(b => b.id === selectedBesa);
       if (!besaToUpdate) return;
 
-      const besaDocRef = doc(db, 'Besas', besaToUpdate.id);
-
-      await updateDoc(besaDocRef, {
+      const response = await api.patch(`/api/besas/${besaToUpdate.id}`, {
         name: besaToUpdate.name,
         email: besaToUpdate.email,
         role: besaToUpdate.role,
         status: besaToUpdate.status,
         supportedTourIds: besaToUpdate.supportedTourIds || [],
       });
+      const updatedBesa = response.data as BesaType;
+      setBesas((prev) => prev.map((besa) => (besa.id === updatedBesa.id ? { ...besa, ...updatedBesa } : besa)));
 
       setSelectedBesa(null); 
       alert('BESA updated successfully!');
@@ -338,8 +281,7 @@ export default function BESAManagementView() {
                       onClick={async () => {
                         if (window.confirm(`Are you sure you want to deactivate and delete ${besa.name}? This action cannot be undone.`)) {
                           try {
-                            const besaDocRef = doc(db, 'Besas', besa.id);
-                            await deleteDoc(besaDocRef);
+                            await api.delete(`/api/besas/${besa.id}`);
                             setBesas(prev => prev.filter(b => b.id !== besa.id));
                           } catch (error) {
                             console.error('Error deleting BESA:', error);
@@ -406,8 +348,7 @@ export default function BESAManagementView() {
                 onClick={async () => {
                   if (window.confirm(`Are you sure you want to deactivate and delete ${besa.name}? This action cannot be undone.`)) {
                     try {
-                      const besaDocRef = doc(db, 'Besas', besa.id);
-                      await deleteDoc(besaDocRef);
+                      await api.delete(`/api/besas/${besa.id}`);
                       setBesas(prev => prev.filter(b => b.id !== besa.id));
                     } catch (error) {
                       console.error('Error deleting BESA:', error);

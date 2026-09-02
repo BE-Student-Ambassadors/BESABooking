@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createBesa,
+  deleteBesa,
   listBesas,
   updateBesa,
   updateOfficeHours,
@@ -13,3 +14,4 @@ besasRouter.get("/", requireAdmin, listBesas);
 besasRouter.post("/", requireAdmin, createBesa);
 besasRouter.patch("/:besaId", requireAdmin, updateBesa);
 besasRouter.patch("/:besaId/office-hours", requireAdmin, updateOfficeHours);
+besasRouter.delete("/:besaId", requireAdmin, deleteBesa);

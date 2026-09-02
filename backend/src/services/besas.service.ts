@@ -16,4 +16,8 @@ export const besasService = {
   async updateOfficeHours(besaId: string, payload: unknown) {
     return besasRepository.updateOfficeHours(besaId, payload);
   },
+
+  async deleteBesa(besaId: string) {
+    await besasRepository.delete(besaId);
+  },
 };

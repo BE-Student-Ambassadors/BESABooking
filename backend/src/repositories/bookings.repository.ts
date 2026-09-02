@@ -1,4 +1,35 @@
 import { db } from "../config/firebaseAdmin.js";
+import { AppError } from "../utils/errors.js";
+
+function normalizeBesaEntry(besa: unknown) {
+  if (typeof besa === "string") {
+    return besa;
+  }
+
+  if (besa && typeof besa === "object") {
+    const named = besa as { name?: unknown; email?: unknown };
+    return {
+      name: typeof named.name === "string" ? named.name.trim() : "",
+      email: typeof named.email === "string" ? named.email.trim() : "",
+    };
+  }
+
+  return "";
+}
+
+function normalizeBookingRecord(bookingId: string, data: Record<string, unknown>) {
+  const besas = Array.isArray(data.besas)
+    ? data.besas
+    : data.besa !== undefined
+      ? [data.besa]
+      : [];
+
+  return {
+    ...data,
+    bookingId,
+    besas: besas.map(normalizeBesaEntry).filter(Boolean),
+  };
+}
 
 type query = {
   id?: string
@@ -6,6 +37,13 @@ type query = {
 }
 
 export const bookingsRepository = {
+  async list() {
+    const snapshot = await db.collection("Bookings").get();
+    return snapshot.docs.map((document) =>
+      normalizeBookingRecord(document.id, (document.data() ?? {}) as Record<string, unknown>),
+    );
+  },
+
   async findByReference(query: query) {
     if (!query?.id && !query?.lastName) return {query: null, message: "Need at least lastName or id"}
     const bookingRef = db.collection("Bookings")
@@ -81,6 +119,10 @@ export const bookingsRepository = {
 
   async getById(bookingId: string) {
     const snapshot = await db.collection("Bookings").doc(bookingId).get();
+    if (!snapshot.exists) {
+      throw new AppError("Booking not found.", 404);
+    }
+
     return {
       id: snapshot.id,
       ...snapshot.data(),
@@ -88,10 +130,10 @@ export const bookingsRepository = {
   },
 
   async create(payload: unknown) {
-    return {
-      message: "TODO: persist booking and side effects here.",
-      payload,
-    };
+    const record = payload as Record<string, unknown>;
+    const created = await db.collection("Bookings").add(record);
+    const snapshot = await created.get();
+    return normalizeBookingRecord(created.id, (snapshot.data() ?? {}) as Record<string, unknown>);
   },
 
   async reschedule(bookingId: string, payload: Partial<BookingData>, besas: unknown) {
@@ -144,7 +186,28 @@ export const bookingsRepository = {
     
   },
 
+  async updateAdmin(bookingId: string, payload: Record<string, unknown>) {
+    const bookingRef = db.collection("Bookings").doc(bookingId);
+    const snapshot = await bookingRef.get();
+
+    if (!snapshot.exists) {
+      throw new AppError("Booking not found.", 404);
+    }
+
+    await bookingRef.update(payload);
+    const updated = await bookingRef.get();
+
+    return normalizeBookingRecord(bookingId, (updated.data() ?? {}) as Record<string, unknown>);
+  },
+
   async cancel(bookingId: string) {
-    await db.collection("Bookings").doc(bookingId).delete();
+    const bookingRef = db.collection("Bookings").doc(bookingId);
+    const snapshot = await bookingRef.get();
+
+    if (!snapshot.exists) {
+      throw new AppError("Booking not found.", 404);
+    }
+
+    await bookingRef.delete();
   },
 };

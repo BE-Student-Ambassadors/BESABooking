@@ -3,7 +3,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { env } from "./env.js";
 
 
-const app =
+export const firebaseAdminApp =
   getApps()[0] ??
   initializeApp({
     credential:
@@ -16,4 +16,4 @@ const app =
         : applicationDefault(),
   });
 
-export const db = getFirestore(app);
+export const db = getFirestore(firebaseAdminApp);

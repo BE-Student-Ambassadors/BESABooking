@@ -32,14 +32,19 @@ declare global {
         endDate?: string; // Optional end date
         durationUnit: 'minutes' | 'hours' | 'hour'; // Unit for duration
         maxAttendeesPerBooking: number; // Maximum number of attendees per booking
+        bookingNotice?: string; // Tour-specific message shown before selecting a booking date
+        bannerImageUrl?: string; // Optional banner shown when this tour is selected
         maxBookings: number; // Maximum number of bookings allowed per session
         location: string; // Physical location or 'Online'
+        calendarInviteLocation?: string; // Optional location shown on the calendar invite
         zoomLink: string; // Zoom link if applicable
         autoGenerateZoom: boolean;
+        calendarInviteDetails?: string; // Optional custom details shown on the calendar invite
 
         // Availability
         weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours
         availabilityRanges?: AvailabilityRange[]; // Date ranges with their own recurring hours
+        googleCalendarId?: string; // Google Calendar destination for bookings from this tour
         // Example: { monday: [{ start: '09:00', end: '17:00' }], tuesday: [...] }  
 
         // Date-Specific Availability
@@ -136,6 +141,11 @@ declare global {
         };
     }
 
+    interface BesaAssignment {
+        name: string;
+        email: string;
+    }
+
     interface BookingData {
         bookingId: string; // specific ID for each booking
         tourId?: string; // gets tour name for display purposes
@@ -149,7 +159,7 @@ declare global {
         time?: string;
         attendees: number;
         maxAttendees: number;
-        besas: string[];
+        besas: Array<BesaAssignment | string>;
         email?: string;
         firstName?: string;
         lastName?: string;
