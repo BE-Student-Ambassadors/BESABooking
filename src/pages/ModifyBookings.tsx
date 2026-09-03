@@ -45,6 +45,7 @@ const ModifyBookingsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [tour, setTour] = useState<Tour | null>(null);
   const [reason, setReason] = useState("");
   const [lastName, setLastName] = useState("");
@@ -66,6 +67,7 @@ const ModifyBookingsPage: React.FC = () => {
       return;
     }
     setError(null);
+    setSaveSuccessMessage(null);
     setLoading(true);
     resetState();
     try {
@@ -111,6 +113,7 @@ const ModifyBookingsPage: React.FC = () => {
 
     setSaving(true);
     setError(null);
+    setSaveSuccessMessage(null);
 
     try {
       const response = await api.patch(`/api/bookings/${bookingId}/reschedule`, {
@@ -129,7 +132,7 @@ const ModifyBookingsPage: React.FC = () => {
         bookingId,
         ...updates,
       } as BookingDoc) : current);
-      setError("Changes saved. Your booking has been updated.");
+      setSaveSuccessMessage("Changes saved. Your booking has been updated.");
     } catch (err) {
       console.error("Save error:", err);
       setError("Failed to save changes. Please try again.");
@@ -167,9 +170,15 @@ const ModifyBookingsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         <div className="bg-white rounded-xl shadow-sm border p-6 space-y-6">
-          <div className="space-y-2">
+          <form
+            className="space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleLookup();
+            }}
+          >
             <label className="text-sm font-semibold text-gray-800">Find Your Booking</label>
             <p className="text-sm text-gray-500">
              Enter the last name associated with the booking or the confirmation number.
@@ -193,7 +202,7 @@ const ModifyBookingsPage: React.FC = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button
-                onClick={handleLookup}
+                type="submit"
                 className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition w-full sm:w-auto"
                 disabled={loading}
               >
@@ -201,28 +210,28 @@ const ModifyBookingsPage: React.FC = () => {
                 <span className="ml-2">Lookup</span>
               </button>
             </div>
-          </div>
+          </form>
 
-          {(booking && tour) && (
-            <div className="space-y-4">
-              <div className="p-4 bg-gray-50 rounded-lg border">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{booking.tourType || "Tour"}</h3>
-                <p className="text-sm text-gray-700">
-                  Current: {booking.date} at {booking.time || booking.startTime}
-                </p>
-                <p className="text-sm text-gray-700">
-                  Name: {booking.firstName} {booking.lastName}
-                </p>
-                <p className="text-sm text-gray-700">Email: {booking.email}</p>
-              </div>
+          {error && (
+            <div className="p-3 rounded-lg text-sm border bg-gray-50 text-gray-800">
+              {error}
+            </div>
+          )}
+        </div>
 
-              <DynamicBookingForm
-                tours={[tour]}
-                preselectedTour={tour.tourId || booking.tourId || ""}
-                navigate={navigate}
-                preselectedBooking={booking}
-                onSubmit={handleSave}
-              />
+        {(booking && tour) && (
+          <div className="space-y-4">
+            <DynamicBookingForm
+              tours={[tour]}
+              preselectedTour={tour.tourId || booking.tourId || ""}
+              navigate={navigate}
+              preselectedBooking={booking}
+              onSubmit={handleSave}
+              mode="reschedule"
+              successMessage={saveSuccessMessage}
+            />
+
+            <div className="bg-white rounded-xl shadow-sm border p-6 space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-800">
                   Any notes for us about this change?
@@ -247,14 +256,8 @@ const ModifyBookingsPage: React.FC = () => {
                 </button>
               </div>
             </div>
-          )}
-
-          {error && (
-            <div className="p-3 rounded-lg text-sm border bg-gray-50 text-gray-800">
-              {error}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
