@@ -33,7 +33,7 @@ export const bookingService = {
     return bookingsRepository.create({ ...booking, besas });
   },
 
-  async rescheduleBooking(bookingId: string, payload: unknown) {
+  async rescheduleBooking(bookingId: string, payload: Partial<BookingData>) {
     const existing = await bookingsRepository.getById(bookingId);
     const tourId = existing.tourId;
     if (typeof tourId !== "string") {
@@ -43,7 +43,7 @@ export const bookingService = {
     const tour = await toursRepository.getById(tourId);
     await availabilityService.assertRescheduleAllowed(existing, payload, tour);
     const besas = await assignmentService.assignBesas(payload, tour);
-    return bookingsRepository.reschedule(bookingId, payload as BookingData, besas);
+    return bookingsRepository.reschedule(bookingId, payload, besas);
   },
 
   async cancelBooking(bookingId: string) {

@@ -48,16 +48,16 @@ export const bookingsRepository = {
     if (!query?.id && !query?.lastName) return {query: null, message: "Need at least lastName or id"}
     const bookingRef = db.collection("Bookings")
     //ensures that the tour exists within the database
-    async function validate(tourId: string): Promise<Tour | null> {
+    async function validate(tourId: string): Promise<[Tour, string] | null> {
       const tourRef = await db.collection("Tours").doc(tourId).get()
       if (tourRef.exists) {
-        return tourRef.data() as Tour;
+        return [tourRef.data() as Tour, tourRef.id];
       } else {
         return null;
       }
     }
 
-    let newQuery: {booking: BookingData, booking_id: string, tour?: Tour} | null = null
+    let newQuery: {booking: BookingData, booking_id: string, tour?: Tour, tour_id?: string} | null = null
     let message: string = ""
 
     if (query.id) {
@@ -96,7 +96,9 @@ export const bookingsRepository = {
     if (newQuery?.booking.tourId) {
       const isValid = await validate(newQuery.booking.tourId)
       if (isValid) {
-        newQuery.tour = isValid
+        const [tour, id] = isValid
+        newQuery.tour = {...tour, tourId: id}
+        newQuery.tour_id = id
         return {
           query: newQuery,
           message: message
@@ -124,7 +126,7 @@ export const bookingsRepository = {
     return {
       id: snapshot.id,
       ...snapshot.data(),
-    } as Record<string, unknown>;
+    } as Partial<BookingData> & { id: string };
   },
 
   async create(payload: unknown) {
@@ -134,45 +136,7 @@ export const bookingsRepository = {
     return normalizeBookingRecord(created.id, (snapshot.data() ?? {}) as Record<string, unknown>);
   },
 
-  async reschedule(bookingId: string, payload: BookingData, besas: unknown) {
-    const toMinutes = (t: string) => {
-      if (!t || !t.includes(":")) return -1;
-      const [h, mPart] = t.split(":");
-      const [m, ampmMaybe] = mPart.split(" ");
-      let mins = parseInt(h, 10) % 12 * 60 + parseInt(m, 10);
-      if (ampmMaybe?.toUpperCase() === "PM") mins += 12 * 60;
-      // if already 24h, ampmMaybe undefined, above still fine
-      if (!ampmMaybe && h.length === 2) {
-        const hh = parseInt(h, 10);
-        mins = hh * 60 + parseInt(m, 10);
-      }
-      return mins;
-
-    };
-    //Unsure what to do with BESAS
-    //Make sure time does not conflict with another one. 
-    const dateVal = payload?.date
-    const timeLabel = payload?.time || ""
-    const bookingsCol = db.collection("Bookings");
-    const qSnap = await bookingsCol.where("date", "==", dateVal).get()
-    //variable with conflict
-    const conflict = qSnap.docs.some((d) => {
-      if (d.id === bookingId) return false;
-      const data = d.data() as BookingData;
-      const bookedTime = data.time || data.startTime;
-      if (!bookedTime) return false;
-      return toMinutes(bookedTime) === toMinutes(timeLabel);
-    });
-
-    if (conflict) {
-      return {
-        message: "That time is already booked for another tour. Please choose a different time.",
-        bookingId,
-        payload: null,
-        besas
-      }
-    }
-    
+  async reschedule(bookingId: string, payload: Partial<BookingData>, besas: unknown) {
     const bookingRef = db.collection("Bookings").doc(bookingId)
     await bookingRef.update({...payload})
     return {

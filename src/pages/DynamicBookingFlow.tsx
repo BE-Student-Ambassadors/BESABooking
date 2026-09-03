@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft } from "lucide-react";
+import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft, Loader2, Save } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
-import api from "../api.ts";
+import api, { getAvailability as fetchAvailability, getAvailabilityRange as fetchAvailabilityRange, type AvailabilityResponse } from "../api.ts";
+import type { BookingDoc } from "./ModifyBookings.tsx";
 
 type BookingRecord = {
   tourId?: string;
@@ -12,33 +13,6 @@ type BookingRecord = {
   startTime?: string;
   endTime?: string;
 };
-
-interface BookingData {
-  tourId: string;
-  bookingId: string;
-  tourType: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  time?: string;
-  attendees: number;
-  maxAttendees: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  organization: string;
-  role: string;
-  interests: string[];
-  timeSlot: string;
-  groupSize: number;
-  status: string;
-  leadGuide: string;
-  notes: string;
-  besas: string[];
-  accommodations?: string;
-  largeTourDetails?: string;
-}
 
 const besaSupportsTour = (besa: Pick<BesaData, "supportedTourIds">, tourId?: string) => {
   if (!tourId) return true;
@@ -52,10 +26,14 @@ const besaSupportsTour = (besa: Pick<BesaData, "supportedTourIds">, tourId?: str
 {/* Scheduling Rules: Show Date Ranges */ }
 
 interface DynamicBookingFormProps {
-  onBack: () => void | Promise<void>;
+  onBack?: () => void | Promise<void>;
   preselectedTour?: string;
   tours: Tour[];
   navigate: (path: string, options?: any) => void;
+  preselectedBooking?: BookingDoc;
+  onSubmit?: (updates: Partial<BookingDoc>) => void | Promise<void>;
+  mode?: "default" | "reschedule";
+  successMessage?: string | null;
 }
 
 interface CustomCalendarProps {
@@ -65,6 +43,7 @@ interface CustomCalendarProps {
   isDateAvailable: (dateString: string, tour: Tour) => { available: boolean; reason?: string };
   minDate?: Date | null;
   maxDate?: Date | null;
+  onVisibleRangeChange?: (rangeStart: string, rangeEnd: string) => void;
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -113,6 +92,7 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
   isDateAvailable,
   minDate,
   maxDate,
+  onVisibleRangeChange,
 }) => {
   const getInitialWeekStart = () => {
     if (selectedDate) {
@@ -143,6 +123,8 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
     month: "long",
     year: "numeric",
   });
+  const visibleRangeStart = formatDateString(currentWeekStart);
+  const visibleRangeEnd = formatDateString(periodEnd);
 
   const isDateDisabled = (dateObj: Date): boolean => {
     const dateStr = formatDateString(dateObj);
@@ -179,8 +161,12 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
   const canGoPreviousDesktop = !minWeekStart || previousDesktopPeriodStart >= minWeekStart;
   const canGoNextDesktop = !maxDateTime || nextDesktopPeriodStart <= maxDateTime;
 
+  useEffect(() => {
+    onVisibleRangeChange?.(visibleRangeStart, visibleRangeEnd);
+  }, [visibleRangeStart, visibleRangeEnd]);
+
   return (
-    <div className="border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
+    <div className="h-90% border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
       <div className="mb-6 flex justify-center">
         <div className="flex flex-col items-center gap-1">
           <h3 className="text-xl font-bold text-blue-600">
@@ -269,7 +255,7 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
           <ChevronLeft className="h-5 w-5" />
         </button>
 
-        <div className="grid flex-1 grid-cols-7 gap-2 overflow-x-auto pb-2">
+        <div className="grid min-w-0 flex-1 grid-cols-7 gap-1.5">
           {displayedDays.map((dateObj) => {
             const dateStr = formatDateString(dateObj);
             const isSelected = selectedDate === dateStr;
@@ -285,14 +271,13 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
                 onClick={() => !isDisabled && onDateSelect(dateStr)}
                 disabled={isDisabled}
                 className={`
-                  min-h-[74px] min-w-[74px] rounded-xl border px-2.5 py-2 text-left transition-all
+                  min-h-[74px] min-w-0 rounded-xl border px-1.5 py-2 text-center transition-all
                   ${isSelected ? "bg-blue-500 text-white shadow-lg ring-2 ring-blue-500 border-blue-500" : ""}
                   ${!isSelected && !isDisabled ? "bg-blue-50 hover:bg-blue-100 text-gray-800 border-blue-200 hover:border-blue-400" : ""}
                   ${isDisabled ? "text-gray-300 cursor-not-allowed bg-gray-50 border-gray-200 opacity-60" : "cursor-pointer"}
                 `}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div>
                     <div className={`text-xs font-semibold uppercase tracking-[0.2em] ${isSelected ? "text-blue-100" : "text-blue-700"}`}>
                       {weekdayLabel}
                     </div>
@@ -302,12 +287,6 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
                     <div className={`mt-1 text-xs ${isSelected ? "text-blue-100" : "text-gray-500"}`}>
                       {monthLabel}
                     </div>
-                  </div>
-                  {!isDisabled && (
-                    <span className={`rounded-full px-1 py-0.5 text-[9px] font-semibold leading-none ${isSelected ? "bg-white/20 text-white" : "bg-white text-blue-700"}`}>
-                      Open
-                    </span>
-                  )}
                 </div>
               </button>
             );
@@ -475,6 +454,7 @@ function BookingPage() {
             location: data.location ?? "",
             zoomLink: data.zoomLink ?? "",
             autoGenerateZoom: data.autoGenerateZoom ?? false,
+            allowConcurrentTours: data.allowConcurrentTours ?? false,
             weeklyHours: normalizeWeeklyHours(data.weeklyHours),
             availabilityRanges: normalizeAvailabilityRanges(data),
             dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
@@ -525,18 +505,22 @@ function BookingPage() {
 }
 
 // ---------- Form (child) ----------
-const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
+export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   onBack,
   preselectedTour = "",
   tours,
   navigate,
+  preselectedBooking,
+  onSubmit,
+  mode = "default",
+  successMessage,
 }) => {
   const [currentSection, setCurrentSection] = useState(1);
   const [selectedTour, setSelectedTour] = useState<string | null>(null);
   // const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // Booking Data State
-  const [bookingData, setBookingData] = useState<BookingData>({
+  const initialBook:BookingDoc = preselectedBooking || {
     tourId: preselectedTour || "",
     bookingId: "",
     tourType: "",
@@ -561,11 +545,16 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     besas: [],
     accommodations: "",
     largeTourDetails: "",
-  });
+  }
+  const [bookingData, setBookingData] = useState<BookingDoc>(initialBook);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [besas, setBesas] = useState<BesaData[]>([]);
+  const [calendarRange, setCalendarRange] = useState<{ start: string; end: string } | null>(null);
+  const [availabilityDates, setAvailabilityDates] = useState<Record<string, boolean>>({});
+  const [selectedDateAvailability, setSelectedDateAvailability] = useState<AvailabilityResponse | null>(null);
+  const [loadingSelectedDateAvailability, setLoadingSelectedDateAvailability] = useState(false);
 
   const sections = [
     { id: 1, title: "Date & Type of Tour", description: "Choose your preferred tour and date" },
@@ -599,7 +588,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   };
 
 
-  const updateBookingData = (field: keyof BookingData, value: any) => {
+  const updateBookingData = (field: keyof BookingDoc, value: any) => {
     setBookingData((prev) => ({ ...prev, [field]: value }));
     if (errors[field as string]) {
       setErrors((prev) => ({ ...prev, [field as string]: "" }));
@@ -613,6 +602,60 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     if (!preselectedTour || !tours.length) return;
     selectTourById(preselectedTour.trim());
   }, [preselectedTour, tours]);
+
+  useEffect(() => {
+    if (!bookingData.tourId || !calendarRange) {
+      setAvailabilityDates({});
+      return;
+    }
+
+    let active = true;
+
+    fetchAvailabilityRange(bookingData.tourId, calendarRange.start, calendarRange.end)
+      .then((response) => {
+        if (!active) return;
+        setAvailabilityDates(response.dates || {});
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("Error fetching availability range:", error);
+        setAvailabilityDates({});
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookingData.tourId, calendarRange]);
+
+  useEffect(() => {
+    if (!bookingData.tourId || !bookingData.date) {
+      setSelectedDateAvailability(null);
+      setLoadingSelectedDateAvailability(false);
+      return;
+    }
+
+    let active = true;
+    setLoadingSelectedDateAvailability(true);
+
+    fetchAvailability(bookingData.tourId, bookingData.date)
+      .then((response) => {
+        if (!active) return;
+        setSelectedDateAvailability(response);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("Error fetching date availability:", error);
+        setSelectedDateAvailability(null);
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoadingSelectedDateAvailability(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookingData.tourId, bookingData.date]);
 
   // ---------- Helpers for Section 2 ----------
   const toMinutes = (timeStr: string) => {
@@ -705,7 +748,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     return rules.blockedRanges.some((range) => slotStartMinutes < range.end && range.start < slotEndMinutes);
   };
 
-  const getAvailableTimesForDate = (dateStr: string, tour: Tour) => {
+  const getLocallyAvailableTimesForDate = (dateStr: string, tour: Tour) => {
     if (!dateStr || !isDateAvailable(dateStr, tour).available) return [];
 
     const durationMinutes =
@@ -742,6 +785,18 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         slotDateTime.setHours(hour24, minute, 0, 0);
         return slotDateTime >= minimumStart;
       });
+  };
+
+  const getAvailableTimesForDate = (dateStr: string, tour: Tour) => {
+    if (
+      selectedDateAvailability &&
+      selectedDateAvailability.tourId === tour.tourId &&
+      selectedDateAvailability.date === dateStr
+    ) {
+      return (selectedDateAvailability.times || []).map((slot) => slot.time);
+    }
+
+    return getLocallyAvailableTimesForDate(dateStr, tour);
   };
 
   const parseTime12Hour = (time12: string) => {
@@ -913,6 +968,13 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       };
     }
 
+    if (availabilityDates[dateString] === false) {
+      return {
+        available: false,
+        reason: "No available time slots for this date."
+      };
+    }
+
     return { available: true };
   };
 
@@ -927,7 +989,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         break;
       case 2:
         if (!bookingData.startTime) newErrors.time = "Please select a time slot";
-        if (bookingData.maxAttendees < 1) newErrors.maxAttendees = "Group size must be at least 1";
+        if (!bookingData.maxAttendees || bookingData.maxAttendees < 1) newErrors.maxAttendees = "Group size must be at least 1";
         break;
       case 3:
         if (!bookingData.firstName) newErrors.firstName = "First name is required";
@@ -950,6 +1012,19 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  const validateReschedule = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!bookingData.date) newErrors.date = "Please select a date";
+    if (!bookingData.startTime) newErrors.time = "Please select a time slot";
+    if (!bookingData.maxAttendees || bookingData.maxAttendees < 1) {
+      newErrors.maxAttendees = "Group size must be at least 1";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   // ---------- Section nav ----------
   const nextSection = () => {
     if (validateSection(currentSection)) {
@@ -960,10 +1035,14 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const prevSection = () => setCurrentSection((s) => Math.max(s - 1, 1));
 
   // ---------- Submit ----------
- const handleSubmit = async () => {
-  if (isSubmitting) return;
-  if (!validateSection(currentSection)) return;
-  setIsSubmitting(true);
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    if (mode === "reschedule") {
+      if (!validateReschedule()) return;
+    } else if (!validateSection(currentSection)) {
+      return;
+    }
+    setIsSubmitting(true);
 
     try {
       const selected = tours.find((t) => t.tourId === bookingData.tourId);
@@ -986,6 +1065,7 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
       const updatedBookingData = {
         ...bookingData,
+        bookingId: bookingData.bookingId || "",
         time: bookingData.startTime,
         endTime: endLocal.toLocaleTimeString("en-US", {
           hour: "numeric",
@@ -995,6 +1075,15 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         endTimeISO: toLocalISO(endLocal),
         location: selected.location || "Not specified",
       };
+
+      if (onSubmit) {
+        await onSubmit({
+          ...updatedBookingData,
+          accommodations: updatedBookingData.accommodations || "",
+          largeTourDetails: updatedBookingData.largeTourDetails || "",
+        });
+        return;
+      }
 
       const bookingPayload = {
         ...updatedBookingData,
@@ -1037,7 +1126,8 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       });
     } catch (error) {
       console.error("Error during submission:", error);
-      alert("Failed to submit booking. Please try again.");
+      const message = (error as any)?.response?.data?.message || "Failed to submit booking. Please try again.";
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -1096,6 +1186,239 @@ const renderSectionIndicator = () => {
     </>
   );
 };
+
+  const renderRescheduleLayout = () => {
+    const selected = tours.find((t) => t.tourId === bookingData.tourId);
+    if (!selected) return null;
+
+    const availableTimes = getAvailableTimesForDate(bookingData.date, selected);
+    const currentBookingTime = preselectedBooking?.time || preselectedBooking?.startTime;
+    const now = new Date();
+    const tourStart = toDateOnly(selected.startDate);
+    const tourEnd = toDateOnly(selected.endDate);
+
+    let minNoticeDate = new Date(now);
+    minNoticeDate.setDate(minNoticeDate.getDate() + 1);
+    minNoticeDate.setHours(0, 0, 0, 0);
+
+    let rangeMinDate = null;
+    let rangeMaxDate = null;
+
+    const availabilityRanges = normalizeAvailabilityRanges(selected)
+      .filter((range) => range.startDate && range.endDate);
+
+    if (availabilityRanges.length > 0) {
+      const dates = availabilityRanges.map((range) => ({
+        start: new Date(range.startDate + "T00:00:00"),
+        end: new Date(range.endDate + "T23:59:59"),
+      }));
+
+      rangeMinDate = new Date(Math.min(...dates.map((d) => d.start.getTime())));
+      rangeMaxDate = new Date(Math.max(...dates.map((d) => d.end.getTime())));
+    } else if (selected.dateSpecificDays && selected.dateSpecificDays.length > 0) {
+      const dates = selected.dateSpecificDays.map((d) => ({
+        start: new Date(d.startDate + "T00:00:00"),
+        end: new Date(d.endDate + "T23:59:59"),
+      }));
+
+      rangeMinDate = new Date(Math.min(...dates.map((d) => d.start.getTime())));
+      rangeMaxDate = new Date(Math.max(...dates.map((d) => d.end.getTime())));
+    }
+
+    const minDate = [minNoticeDate, rangeMinDate, tourStart]
+      .filter((d): d is Date => !!d)
+      .reduce((max, d) => (d > max ? d : max), minNoticeDate);
+
+    let maxDate = rangeMaxDate;
+    if (!maxDate) {
+      maxDate = new Date(now);
+      switch (selected.maxNoticeUnit) {
+        case "days":
+          maxDate.setDate(maxDate.getDate() + selected.maxNotice);
+          break;
+        case "weeks":
+          maxDate.setDate(maxDate.getDate() + (selected.maxNotice * 7));
+          break;
+        case "months":
+          maxDate.setMonth(maxDate.getMonth() + selected.maxNotice);
+          break;
+      }
+    }
+
+    if (tourEnd && (!maxDate || tourEnd < maxDate)) {
+      const endOfDay = new Date(tourEnd);
+      endOfDay.setHours(23, 59, 59, 999);
+      maxDate = endOfDay;
+    }
+
+    if (maxDate && maxDate < minDate) {
+      maxDate = minDate;
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">
+                Reschedule Booking
+              </p>
+              <h2 className="text-2xl font-bold text-slate-900">{selected.title}</h2>
+              <p className="text-sm text-slate-600">
+                Choose a new date and time.
+              </p>
+            </div>
+            <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 sm:grid-cols-2 lg:min-w-[320px]">
+              <div>
+                <p className="font-semibold text-slate-900">Current booking</p>
+                <p>{preselectedBooking?.date || "No date selected"}</p>
+                <p>{currentBookingTime || "No time selected"}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Updated selection</p>
+                <p>{bookingData.date || "Select a date"}</p>
+                <p>{bookingData.startTime || "Select a time"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+          <div className="flex min-w-0 flex-col">
+            <CustomCalendar
+              selectedDate={bookingData.date ?? ""}
+              onVisibleRangeChange={(rangeStart, rangeEnd) =>
+                setCalendarRange((current) =>
+                  current?.start === rangeStart && current?.end === rangeEnd
+                    ? current
+                    : { start: rangeStart, end: rangeEnd }
+                )
+              }
+              onDateSelect={(date) => {
+                const nextDate = bookingData.date === date ? "" : date;
+
+                setBookingData((prev) => ({
+                  ...prev,
+                  date: nextDate,
+                  startTime: "",
+                  time: "",
+                  endTime: "",
+                }));
+
+                if (!nextDate) {
+                  setErrors((prev) => ({ ...prev, date: "", time: "" }));
+                  return;
+                }
+
+                const inRange = new Date(nextDate + "T00:00:00");
+                if (inRange < minDate || inRange > maxDate) {
+                  setErrors((prev) => ({
+                    ...prev,
+                    date: `Please select a date between ${minDate.toLocaleDateString()} and ${maxDate.toLocaleDateString()}`,
+                  }));
+                  return;
+                }
+
+                const validation = isDateAvailable(nextDate, selected);
+                if (!validation.available) {
+                  setErrors((prev) => ({
+                    ...prev,
+                    date: validation.reason || "Unable to book on this day. Please select an available date.",
+                  }));
+                } else {
+                  setErrors((prev) => ({ ...prev, date: "", time: "" }));
+                }
+              }}
+              tourData={selected}
+              isDateAvailable={(date, tour) => {
+                const dateObj = new Date(date + "T00:00:00");
+                if (dateObj < minDate || dateObj > maxDate) {
+                  return { available: false, reason: "Date is outside the booking window" };
+                }
+                if (availabilityDates[date] === false) {
+                  return { available: false, reason: "No available time slots for this date" };
+                }
+                if (getAvailableTimesForDate(date, tour).length === 0) {
+                  return { available: false, reason: "No available time slots for this date" };
+                }
+                return isDateAvailable(date, tour);
+              }}
+              minDate={minDate}
+              maxDate={maxDate}
+            />
+            {errors.date && (
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-500" />
+                <p className="text-sm text-red-500">{errors.date}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="h-full rounded-2xl border border-blue-200 bg-blue-50 p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="rounded-lg bg-blue-600 p-2">
+                  <Clock className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Available Time Slots</h3>
+                  <p className="text-sm text-slate-600">Only available slots for the selected date are shown.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {availableTimes.length > 0 ? (
+                  availableTimes.map((time) => (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => {
+                        updateBookingData("startTime", time);
+                        updateBookingData("time", time);
+                      }}
+                      className={`rounded-xl border-2 p-3 text-center transition-all hover:shadow-md ${
+                        bookingData.startTime === time
+                          ? "border-blue-500 bg-white text-blue-700"
+                          : "border-blue-100 bg-white/80 text-slate-700 hover:border-blue-300"
+                      }`}
+                    >
+                      <span className="block font-semibold">{time}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="col-span-full rounded-xl border border-dashed border-blue-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                    Select a date to see available times.
+                  </p>
+                )}
+              </div>
+
+              {errors.time && <p className="mt-3 text-sm text-red-500">{errors.time}</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-start">
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-semibold transition-colors ${
+              isSubmitting
+                ? "cursor-not-allowed bg-green-300 text-white"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
+          >
+            <Save className="h-4 w-4" />
+            {isSubmitting ? "Saving..." : "Save Changes"}
+          </button>
+          {successMessage && (
+            <p className="text-sm font-medium text-green-700 sm:self-center" role="status">
+              {successMessage}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const renderSection1 = () => {
     const selectedTourData = tours.find((t) => t.tourId === bookingData.tourId);
@@ -1181,6 +1504,9 @@ const renderSectionIndicator = () => {
     // Helper to check if a date has any available time slots
     const hasAvailableTimeSlots = (dateStr: string): boolean => {
       if (!selectedTourData) return false;
+      if (availabilityDates[dateStr] !== undefined) {
+        return availabilityDates[dateStr];
+      }
 
       // Block immediately if globally unavailable
       const globallyBlocked = tours.some((t) =>
@@ -1351,9 +1677,16 @@ const renderSectionIndicator = () => {
 
         <div>
           <label className="block text-lg font-semibold text-gray-900 mb-4">Preferred Date</label>
-          <CustomCalendar
-            selectedDate={bookingData.date}
-            onDateSelect={(date) => {
+            <CustomCalendar
+              selectedDate={bookingData.date ?? ""}
+              onVisibleRangeChange={(rangeStart, rangeEnd) =>
+                setCalendarRange((current) =>
+                  current?.start === rangeStart && current?.end === rangeEnd
+                    ? current
+                    : { start: rangeStart, end: rangeEnd }
+                )
+              }
+              onDateSelect={(date) => {
               const nextDate = bookingData.date === date ? "" : date;
 
               setBookingData((prev) => ({
@@ -1393,6 +1726,9 @@ const renderSectionIndicator = () => {
               // First check if date is in valid range
               if (!isDateInRange(date)) {
                 return { available: false, reason: "Date is outside the booking window" };
+              }
+              if (availabilityDates[date] === false) {
+                return { available: false, reason: "No available time slots for this date" };
               }
               // Check if date has any available time slots (considering 24-hour notice)
               if (!hasAvailableTimeSlots(date)) {
@@ -1461,7 +1797,11 @@ const renderSection2 = () => {
             </div>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            {availableTimes.length > 0 ? (
+            {loadingSelectedDateAvailability && bookingData.date ? (
+              <p className="col-span-full text-center text-gray-500">
+                Loading available times...
+              </p>
+            ) : availableTimes.length > 0 ? (
               availableTimes.map((time) => {
                 return (
                   <button
@@ -1755,8 +2095,9 @@ const renderSection2 = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={mode === "reschedule" ? "" : "min-h-screen bg-gray-50"}>
       {/* Header */}
+      {onBack ? (
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1774,54 +2115,69 @@ const renderSection2 = () => {
           </div>
         </div>
       </div>
-
+      ) : <></>}
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className={mode === "reschedule" ? "px-0 py-0" : "max-w-4xl mx-auto px-4 py-8"}>
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-8">
-          {renderSectionIndicator()}
+          {mode === "reschedule" ? (
+            renderRescheduleLayout()
+          ) : (
+            <>
+              {renderSectionIndicator()}
 
-          <div className="mb-8">
-            {currentSection === 1 && renderSection1()}
-            {currentSection === 2 && renderSection2()}
-            {currentSection === 3 && renderSection3()}
-          </div>
+              <div className="mb-8">
+                {currentSection === 1 && renderSection1()}
+                {currentSection === 2 && renderSection2()}
+                {currentSection === 3 && renderSection3()}
+              </div>
 
-          {/* Navigation Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between pt-6 border-t">
-            <button
-              onClick={prevSection}
-              disabled={currentSection === 1}
-              className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors ${currentSection === 1
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                } w-full sm:w-auto`}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Previous
-            </button>
+              {/* Navigation Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-0 sm:justify-between pt-6 border-t">
+                <button
+                  onClick={prevSection}
+                  disabled={currentSection === 1}
+                  className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors ${currentSection === 1
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    } w-full sm:w-auto`}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Previous
+                </button>
 
-            {currentSection < 3 ? (
-              <button
-                onClick={nextSection}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto"
-              >
-                Continue
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors w-full sm:w-auto ${isSubmitting
-                  ? "bg-green-300 text-white cursor-not-allowed"
-                  : "bg-green-600 text-white hover:bg-green-700"
-                  }`}
-              >
-                <Check className="w-4 h-4" />
-                {isSubmitting ? "Booking..." : "Complete Booking"}
-              </button>
-            )}
-          </div>
+                {currentSection < 3 ? (
+                  <button
+                    onClick={nextSection}
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto"
+                  >
+                    Continue
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : onBack ? (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg transition-colors w-full sm:w-auto ${isSubmitting
+                      ? "bg-green-300 text-white cursor-not-allowed"
+                      : "bg-green-600 text-white hover:bg-green-700"
+                      }`}
+                  >
+                    <Check className="w-4 h-4" />
+                    {isSubmitting ? "Booking..." : "Complete Booking"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center justify-center px-4 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition w-full sm:w-auto"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span className="ml-2">{isSubmitting ? "Saving..." : "Submit Changes"}</span>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

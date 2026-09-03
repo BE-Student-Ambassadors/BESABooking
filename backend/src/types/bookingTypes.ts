@@ -40,6 +40,7 @@ declare global {
         // Availability
         weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours
         availabilityRanges?: AvailabilityRange[]; // Date ranges with their own recurring hours
+        allowConcurrentTours?: boolean; // Allows overlaps only with other tours that also enable it
         // Example: { monday: [{ start: '09:00', end: '17:00' }], tuesday: [...] }  
 
         // Date-Specific Availability
@@ -144,7 +145,7 @@ declare global {
         time?: string;
         attendees: number;
         maxAttendees: number;
-        besas: string[];
+        besas: { name: string; email: string }[];
         email?: string;
         firstName?: string;
         lastName?: string;
