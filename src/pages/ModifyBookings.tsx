@@ -135,7 +135,7 @@ const ModifyBookingsPage: React.FC = () => {
       setSaveSuccessMessage("Changes saved. Your booking has been updated.");
     } catch (err) {
       console.error("Save error:", err);
-      setError("Failed to save changes. Please try again.");
+      setError((err as any)?.response?.data?.message || "Failed to save changes. Please try again.");
     } finally {
       setSaving(false);
     }

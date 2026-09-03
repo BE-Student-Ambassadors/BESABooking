@@ -137,44 +137,6 @@ export const bookingsRepository = {
   },
 
   async reschedule(bookingId: string, payload: Partial<BookingData>, besas: unknown) {
-    const toMinutes = (t: string) => {
-      if (!t || !t.includes(":")) return -1;
-      const [h, mPart] = t.split(":");
-      const [m, ampmMaybe] = mPart.split(" ");
-      let mins = parseInt(h, 10) % 12 * 60 + parseInt(m, 10);
-      if (ampmMaybe?.toUpperCase() === "PM") mins += 12 * 60;
-      // if already 24h, ampmMaybe undefined, above still fine
-      if (!ampmMaybe && h.length === 2) {
-        const hh = parseInt(h, 10);
-        mins = hh * 60 + parseInt(m, 10);
-      }
-      return mins;
-
-    };
-    //Unsure what to do with BESAS
-    //Make sure time does not conflict with another one. 
-    const dateVal = payload?.date
-    const timeLabel = payload?.time || ""
-    const bookingsCol = db.collection("Bookings");
-    const qSnap = await bookingsCol.where("date", "==", dateVal).get()
-    //variable with conflict
-    const conflict = qSnap.docs.some((d) => {
-      if (d.id === bookingId) return false;
-      const data = d.data() as BookingData;
-      const bookedTime = data.time || data.startTime;
-      if (!bookedTime) return false;
-      return toMinutes(bookedTime) === toMinutes(timeLabel);
-    });
-
-    if (conflict) {
-      return {
-        message: "That time is already booked for another tour. Please choose a different time.",
-        bookingId,
-        payload: null,
-        besas
-      }
-    }
-    
     const bookingRef = db.collection("Bookings").doc(bookingId)
     await bookingRef.update({...payload})
     return {

@@ -67,6 +67,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     autoGenerateZoom: false,
     weeklyHours: {},
     availabilityRanges: [createDefaultAvailabilityRange()],
+    allowConcurrentTours: false,
     googleCalendarId: '',
     dateSpecificBlockDays: [],
     dateSpecificDays: [],
@@ -350,40 +351,59 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             <div className="flex items-start space-x-2">
               <AlertCircle className="h-4 w-4 2xl:h-5 2xl:w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <p className="text-xs 2xl:text-sm text-blue-800">
-                These details are used for the Google Calendar invite sent for this tour. Leave them blank to use the backend defaults.
+                Leave any field blank to use the default BESA tour settings.
               </p>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Calendar Invite Location
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 2xl:p-4">
+            <label htmlFor="google-calendar-id" className="block text-sm font-medium text-gray-700 mb-2">
+              Save Bookings To
             </label>
             <input
+              id="google-calendar-id"
+              list="google-calendar-options"
               type="text"
               className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
-              placeholder="Optional override for the location shown on the calendar invite"
-              value={tour.calendarInviteLocation ?? ''}
-              onChange={(e) => updateTour({ calendarInviteLocation: e.target.value })}
+              placeholder="primary or a Google Calendar ID"
+              value={tour.googleCalendarId || ''}
+              onChange={(e) => updateTour({ googleCalendarId: e.target.value.trim() })}
             />
-            <p className="text-xs 2xl:text-sm text-gray-500 mt-2">
-              Leave blank to use the tour location automatically.
+            <datalist id="google-calendar-options">
+              <option value="primary">Primary calendar</option>
+            </datalist>
+            <p className="text-xs text-gray-500 mt-2">
+              Enter <code>primary</code> for the BESA Tours calendar, or enter another Google Calendar ID.
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Calendar Invite Details
+              Location
+            </label>
+            <input
+              type="text"
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+              placeholder="Enter the location that will appear on the calendar invite."
+              value={tour.calendarInviteLocation ?? ''}
+              onChange={(e) => updateTour({ calendarInviteLocation: e.target.value })}
+            />
+            <p className="text-xs 2xl:text-sm text-gray-500 mt-2">
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
             </label>
             <textarea
               rows={8}
               className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
-              placeholder="Add the meeting instructions, check-in details, Zoom notes, arrival guidance, or any other text that should appear in the calendar invite."
+              placeholder="Enter any additional information you would like included in the calendar invite."
               value={tour.calendarInviteDetails ?? ''}
               onChange={(e) => updateTour({ calendarInviteDetails: e.target.value })}
             />
             <p className="text-xs 2xl:text-sm text-gray-500 mt-2">
-              Leave blank to use the default invite details for this tour type.
             </p>
           </div>
         </div>
@@ -392,6 +412,23 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     case 4:
   return (
   <div className="space-y-6 2xl:space-y-8">
+
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+      <label className="flex items-start space-x-3">
+        <input
+          type="checkbox"
+          checked={tour.allowConcurrentTours ?? false}
+          onChange={(e) => updateTour({ allowConcurrentTours: e.target.checked })}
+          className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        <div>
+          <span className="block text-sm font-medium text-gray-900">Allow tours at the same time</span>
+          <p className="mt-1 text-xs text-gray-600">
+            Allow this tour to run at the same time as other tour types.
+          </p>
+        </div>
+      </label>
+    </div>
 
     {/* Availability Ranges */}
     <div>
@@ -508,31 +545,6 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             </div>
           </div>
         ))}
-      </div>
-    </div>
-
-    {/* Google Calendar Destination */}
-    <div className="border-t pt-4 2xl:pt-6">
-      <h3 className="text-base 2xl:text-lg font-medium text-gray-900 mb-3 2xl:mb-4">Google Calendar</h3>
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 2xl:p-4">
-        <label htmlFor="google-calendar-id" className="block text-sm font-medium text-gray-700 mb-2">
-          Save bookings to
-        </label>
-        <input
-          id="google-calendar-id"
-          list="google-calendar-options"
-          type="text"
-          className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
-          placeholder="primary or a Google Calendar ID"
-          value={tour.googleCalendarId || ''}
-          onChange={(e) => updateTour({ googleCalendarId: e.target.value.trim() })}
-        />
-        <datalist id="google-calendar-options">
-          <option value="primary">Primary calendar</option>
-        </datalist>
-        <p className="text-xs text-gray-500 mt-2">
-          Enter <code>primary</code> for the connected account's main calendar, or paste a calendar ID such as an email address.
-        </p>
       </div>
     </div>
 
@@ -662,7 +674,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                 : 'bg-gray-100 text-gray-600'
             }`}
           >
-            {dateOverride.appliesToAllTours ? 'Universal: ON' : 'Universal: OFF'}
+            {dateOverride.appliesToAllTours ? 'Apply to All Tours: ON' : 'Apply to All Tours: OFF'}
           </button>
           <span className="text-xs text-gray-600">Applies to all tours</span>
         </div>
@@ -871,6 +883,13 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                 <span className="font-medium text-gray-700">Frequency:</span>
                 <span className="ml-2 text-gray-900">Every {tour.frequency} {tour.frequencyUnit}</span>
               </div>
+
+              <div>
+                <span className="font-medium text-gray-700">Overlap Rule:</span>
+                <span className="ml-2 text-gray-900">
+                  {tour.allowConcurrentTours ? 'Can overlap with other enabled tours' : 'Cannot overlap with other tours'}
+                </span>
+              </div>
               
               <div>
                 <span className="font-medium text-gray-700">Notice Required:</span>
@@ -1068,7 +1087,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               <p className="text-gray-600">Where will this tour take place? Choose in-person, virtual, or both.</p>
             )}
             {currentStep === 3 && (
-              <p className="text-gray-600">Set the location and message that should appear on the calendar invite for this tour.</p>
+              <p className="text-gray-600">Customize the Google Calendar invite guests receive when they book this tour.</p>
             )}
             {currentStep === 4 && (
               <p className="text-gray-600">Set up when this tour will be available for booking.</p>
@@ -1159,6 +1178,14 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
       ).values()
     ).sort((a, b) => `${a.start}|${a.end}`.localeCompare(`${b.start}|${b.end}`));
 
+  const formatTime12Hour = (time24: string) => {
+    if (!time24 || !time24.includes(':')) return time24;
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = ((hours + 11) % 12) + 1;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
   const [searchTerm] = useState('');
   const [filterStatus] = useState<'all' | 'published' | 'draft'>('all');
   const [reordering, setReordering] = useState(false);
@@ -1207,18 +1234,27 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   //   }
   // };
 
+  const formatDateOnly = (dateValue: string) => {
+    const [year, month, day] = dateValue.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
   const getDateRange = (tour: Tour) => {
     if (tour.availabilityRanges?.length) {
       const labels = tour.availabilityRanges
         .filter((range) => range.startDate || range.endDate)
         .map((range) => {
           if (range.startDate && range.endDate) {
-            const start = new Date(range.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            const end = new Date(range.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const start = formatDateOnly(range.startDate);
+            const end = formatDateOnly(range.endDate);
             return `${start} - ${end}`;
           }
           if (range.startDate) {
-            const start = new Date(range.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const start = formatDateOnly(range.startDate);
             return `From ${start}`;
           }
           return null;
@@ -1229,11 +1265,11 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     }
 
     if (tour.startDate && tour.endDate) {
-      const start = new Date(tour.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      const end = new Date(tour.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const start = formatDateOnly(tour.startDate);
+      const end = formatDateOnly(tour.endDate);
       return `${start} - ${end}`;
     } else if (tour.startDate) {
-      const start = new Date(tour.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const start = formatDateOnly(tour.startDate);
       return `From ${start}`;
     }
     return "No dates set";
@@ -1335,6 +1371,14 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     });
     return Object.values(map).sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
   }, [tours]);
+
+  const today = new Date();
+  const todayDate = new Date(today.getTime() - today.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+  const currentUniversalOverrides = universalOverrides.filter(
+    (dateOverride) => (dateOverride.endDate || dateOverride.startDate) >= todayDate
+  );
 
   const addUniversalHoliday = async () => {
     if (!globalHolidayForm.startDate) {
@@ -1618,10 +1662,10 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
             <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-blue-600" />
-                Block Out Dates
+                Unavailable Dates
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                Dates marked apply to all tours.
+                Set dates or times when no tours will be available.
               </p>
 
               <div className="mt-4 space-y-2">
@@ -1732,12 +1776,12 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
               </div>
 
               <div className="mt-6">
-                <h4 className="text-sm font-semibold text-gray-800 mb-2">Existing dates</h4>
-                {universalOverrides.length === 0 ? (
-                  <p className="text-sm text-gray-500">None set yet.</p>
+                <h4 className="text-sm font-semibold text-gray-800 mb-2">Upcoming Unavailable Dates</h4>
+                {currentUniversalOverrides.length === 0 ? (
+                  <p className="text-sm text-gray-500">No current or upcoming dates.</p>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {universalOverrides.map((d) => (
+                    {currentUniversalOverrides.map((d) => (
                       <div
                         key={`${d.startDate}|${d.endDate || d.startDate}`}
                         className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm"
@@ -1749,18 +1793,18 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                           </div>
                           {d.blockedTimes && d.blockedTimes.length > 0 && (
                             <div className="text-xs text-amber-700 mt-1">
-                              Blocked times: {d.blockedTimes.join(', ')}
+                              Blocked times: {d.blockedTimes.map(formatTime12Hour).join(', ')}
                             </div>
                           )}
                           {d.blockedRanges && d.blockedRanges.length > 0 && (
                             <div className="text-xs text-amber-700 mt-1">
-                              Blocked ranges: {d.blockedRanges.map((range) => `${range.start} - ${range.end}`).join(', ')}
+                              Blocked ranges: {d.blockedRanges.map((range) => `${formatTime12Hour(range.start)} - ${formatTime12Hour(range.end)}`).join(', ')}
                             </div>
                           )}
                           {d.slots && d.slots.length > 0 && (
                             <div className="text-xs text-gray-600 mt-1">
                               {d.slots.map((s: any, i: number) => (
-                                <span key={i} className="inline-block mr-2">{s.start} - {s.end}</span>
+                                <span key={i} className="inline-block mr-2">{formatTime12Hour(s.start)} - {formatTime12Hour(s.end)}</span>
                               ))}
                             </div>
                           )}

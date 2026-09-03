@@ -202,6 +202,7 @@ function App() {
             location: data.location ?? "",
             zoomLink: data.zoomLink ?? "",
             autoGenerateZoom: data.autoGenerateZoom ?? false,
+            allowConcurrentTours: data.allowConcurrentTours ?? false,
             weeklyHours: normalizeWeeklyHours(data.weeklyHours),
             availabilityRanges: normalizeAvailabilityRanges(data),
             dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],

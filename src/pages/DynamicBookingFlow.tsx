@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft, Loader2, Save } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
-import api from "../api.ts";
+import api, { getAvailability as fetchAvailability, getAvailabilityRange as fetchAvailabilityRange, type AvailabilityResponse } from "../api.ts";
 import type { BookingDoc } from "./ModifyBookings.tsx";
 
 type BookingRecord = {
@@ -43,6 +43,7 @@ interface CustomCalendarProps {
   isDateAvailable: (dateString: string, tour: Tour) => { available: boolean; reason?: string };
   minDate?: Date | null;
   maxDate?: Date | null;
+  onVisibleRangeChange?: (rangeStart: string, rangeEnd: string) => void;
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -91,6 +92,7 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
   isDateAvailable,
   minDate,
   maxDate,
+  onVisibleRangeChange,
 }) => {
   const getInitialWeekStart = () => {
     if (selectedDate) {
@@ -121,6 +123,8 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
     month: "long",
     year: "numeric",
   });
+  const visibleRangeStart = formatDateString(currentWeekStart);
+  const visibleRangeEnd = formatDateString(periodEnd);
 
   const isDateDisabled = (dateObj: Date): boolean => {
     const dateStr = formatDateString(dateObj);
@@ -156,6 +160,10 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
   const canGoNextMobile = !maxDateTime || nextMobileWeekStart <= maxDateTime;
   const canGoPreviousDesktop = !minWeekStart || previousDesktopPeriodStart >= minWeekStart;
   const canGoNextDesktop = !maxDateTime || nextDesktopPeriodStart <= maxDateTime;
+
+  useEffect(() => {
+    onVisibleRangeChange?.(visibleRangeStart, visibleRangeEnd);
+  }, [visibleRangeStart, visibleRangeEnd]);
 
   return (
     <div className="h-90% border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
@@ -446,6 +454,7 @@ function BookingPage() {
             location: data.location ?? "",
             zoomLink: data.zoomLink ?? "",
             autoGenerateZoom: data.autoGenerateZoom ?? false,
+            allowConcurrentTours: data.allowConcurrentTours ?? false,
             weeklyHours: normalizeWeeklyHours(data.weeklyHours),
             availabilityRanges: normalizeAvailabilityRanges(data),
             dateSpecificBlockDays: data.dateSpecificBlockDays ?? [],
@@ -542,6 +551,10 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [besas, setBesas] = useState<BesaData[]>([]);
+  const [calendarRange, setCalendarRange] = useState<{ start: string; end: string } | null>(null);
+  const [availabilityDates, setAvailabilityDates] = useState<Record<string, boolean>>({});
+  const [selectedDateAvailability, setSelectedDateAvailability] = useState<AvailabilityResponse | null>(null);
+  const [loadingSelectedDateAvailability, setLoadingSelectedDateAvailability] = useState(false);
 
   const sections = [
     { id: 1, title: "Date & Type of Tour", description: "Choose your preferred tour and date" },
@@ -589,6 +602,60 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     if (!preselectedTour || !tours.length) return;
     selectTourById(preselectedTour.trim());
   }, [preselectedTour, tours]);
+
+  useEffect(() => {
+    if (!bookingData.tourId || !calendarRange) {
+      setAvailabilityDates({});
+      return;
+    }
+
+    let active = true;
+
+    fetchAvailabilityRange(bookingData.tourId, calendarRange.start, calendarRange.end)
+      .then((response) => {
+        if (!active) return;
+        setAvailabilityDates(response.dates || {});
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("Error fetching availability range:", error);
+        setAvailabilityDates({});
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookingData.tourId, calendarRange]);
+
+  useEffect(() => {
+    if (!bookingData.tourId || !bookingData.date) {
+      setSelectedDateAvailability(null);
+      setLoadingSelectedDateAvailability(false);
+      return;
+    }
+
+    let active = true;
+    setLoadingSelectedDateAvailability(true);
+
+    fetchAvailability(bookingData.tourId, bookingData.date)
+      .then((response) => {
+        if (!active) return;
+        setSelectedDateAvailability(response);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error("Error fetching date availability:", error);
+        setSelectedDateAvailability(null);
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoadingSelectedDateAvailability(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookingData.tourId, bookingData.date]);
 
   // ---------- Helpers for Section 2 ----------
   const toMinutes = (timeStr: string) => {
@@ -681,7 +748,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     return rules.blockedRanges.some((range) => slotStartMinutes < range.end && range.start < slotEndMinutes);
   };
 
-  const getAvailableTimesForDate = (dateStr: string, tour: Tour) => {
+  const getLocallyAvailableTimesForDate = (dateStr: string, tour: Tour) => {
     if (!dateStr || !isDateAvailable(dateStr, tour).available) return [];
 
     const durationMinutes =
@@ -718,6 +785,18 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         slotDateTime.setHours(hour24, minute, 0, 0);
         return slotDateTime >= minimumStart;
       });
+  };
+
+  const getAvailableTimesForDate = (dateStr: string, tour: Tour) => {
+    if (
+      selectedDateAvailability &&
+      selectedDateAvailability.tourId === tour.tourId &&
+      selectedDateAvailability.date === dateStr
+    ) {
+      return (selectedDateAvailability.times || []).map((slot) => slot.time);
+    }
+
+    return getLocallyAvailableTimesForDate(dateStr, tour);
   };
 
   const parseTime12Hour = (time12: string) => {
@@ -889,6 +968,13 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       };
     }
 
+    if (availabilityDates[dateString] === false) {
+      return {
+        available: false,
+        reason: "No available time slots for this date."
+      };
+    }
+
     return { available: true };
   };
 
@@ -1040,7 +1126,8 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       });
     } catch (error) {
       console.error("Error during submission:", error);
-      alert("Failed to submit booking. Please try again.");
+      const message = (error as any)?.response?.data?.message || "Failed to submit booking. Please try again.";
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -1200,6 +1287,13 @@ const renderSectionIndicator = () => {
           <div className="flex min-w-0 flex-col">
             <CustomCalendar
               selectedDate={bookingData.date ?? ""}
+              onVisibleRangeChange={(rangeStart, rangeEnd) =>
+                setCalendarRange((current) =>
+                  current?.start === rangeStart && current?.end === rangeEnd
+                    ? current
+                    : { start: rangeStart, end: rangeEnd }
+                )
+              }
               onDateSelect={(date) => {
                 const nextDate = bookingData.date === date ? "" : date;
 
@@ -1240,6 +1334,9 @@ const renderSectionIndicator = () => {
                 const dateObj = new Date(date + "T00:00:00");
                 if (dateObj < minDate || dateObj > maxDate) {
                   return { available: false, reason: "Date is outside the booking window" };
+                }
+                if (availabilityDates[date] === false) {
+                  return { available: false, reason: "No available time slots for this date" };
                 }
                 if (getAvailableTimesForDate(date, tour).length === 0) {
                   return { available: false, reason: "No available time slots for this date" };
@@ -1300,12 +1397,7 @@ const renderSectionIndicator = () => {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          {successMessage && (
-            <p className="text-sm font-medium text-green-700" role="status">
-              {successMessage}
-            </p>
-          )}
+        <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-start">
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
@@ -1318,6 +1410,11 @@ const renderSectionIndicator = () => {
             <Save className="h-4 w-4" />
             {isSubmitting ? "Saving..." : "Save Changes"}
           </button>
+          {successMessage && (
+            <p className="text-sm font-medium text-green-700 sm:self-center" role="status">
+              {successMessage}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -1407,6 +1504,9 @@ const renderSectionIndicator = () => {
     // Helper to check if a date has any available time slots
     const hasAvailableTimeSlots = (dateStr: string): boolean => {
       if (!selectedTourData) return false;
+      if (availabilityDates[dateStr] !== undefined) {
+        return availabilityDates[dateStr];
+      }
 
       // Block immediately if globally unavailable
       const globallyBlocked = tours.some((t) =>
@@ -1577,9 +1677,16 @@ const renderSectionIndicator = () => {
 
         <div>
           <label className="block text-lg font-semibold text-gray-900 mb-4">Preferred Date</label>
-          <CustomCalendar
-            selectedDate={bookingData.date ?? ""}
-            onDateSelect={(date) => {
+            <CustomCalendar
+              selectedDate={bookingData.date ?? ""}
+              onVisibleRangeChange={(rangeStart, rangeEnd) =>
+                setCalendarRange((current) =>
+                  current?.start === rangeStart && current?.end === rangeEnd
+                    ? current
+                    : { start: rangeStart, end: rangeEnd }
+                )
+              }
+              onDateSelect={(date) => {
               const nextDate = bookingData.date === date ? "" : date;
 
               setBookingData((prev) => ({
@@ -1619,6 +1726,9 @@ const renderSectionIndicator = () => {
               // First check if date is in valid range
               if (!isDateInRange(date)) {
                 return { available: false, reason: "Date is outside the booking window" };
+              }
+              if (availabilityDates[date] === false) {
+                return { available: false, reason: "No available time slots for this date" };
               }
               // Check if date has any available time slots (considering 24-hour notice)
               if (!hasAvailableTimeSlots(date)) {
@@ -1687,7 +1797,11 @@ const renderSection2 = () => {
             </div>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            {availableTimes.length > 0 ? (
+            {loadingSelectedDateAvailability && bookingData.date ? (
+              <p className="col-span-full text-center text-gray-500">
+                Loading available times...
+              </p>
+            ) : availableTimes.length > 0 ? (
               availableTimes.map((time) => {
                 return (
                   <button
