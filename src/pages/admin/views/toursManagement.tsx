@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useMemo, useRef, Dispatch, SetStateAction } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
@@ -50,8 +50,51 @@ const normalizeAvailabilityRanges = (tour?: Tour): AvailabilityRange[] => {
   return [createDefaultAvailabilityRange()];
 };
 
+const escapeHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;');
+
+const sanitizeCalendarInviteHtml = (html: string) => {
+  const documentBody = new DOMParser().parseFromString(html, 'text/html').body;
+  const allowedTags = new Set(['A', 'B', 'BR', 'DIV', 'P', 'STRONG']);
+
+  const sanitizeElement = (element: Element) => {
+    Array.from(element.children).forEach(sanitizeElement);
+
+    if (!allowedTags.has(element.tagName)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      return;
+    }
+
+    Array.from(element.attributes).forEach((attribute) => {
+      if (element.tagName !== 'A' || attribute.name !== 'href') {
+        element.removeAttribute(attribute.name);
+      }
+    });
+
+    if (element.tagName === 'A') {
+      const href = element.getAttribute('href') || '';
+      if (!/^(https?:|mailto:)/i.test(href)) {
+        element.replaceWith(...Array.from(element.childNodes));
+      }
+    }
+  };
+
+  Array.from(documentBody.children).forEach(sanitizeElement);
+  return documentBody.innerHTML;
+};
+
+const calendarInviteEditorHtml = (value: string) => {
+  const containsSupportedHtml = /<\/?(?:a|b|br|div|p|strong)\b/i.test(value);
+  return containsSupportedHtml
+    ? sanitizeCalendarInviteHtml(value)
+    : escapeHtml(value).replace(/\n/g, '<br>');
+};
+
 function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour?: Tour; onSaveTour: (tour: Tour) => void;}) {
   const [currentStep, setCurrentStep] = useState(1);
+  const calendarInviteEditorRef = useRef<HTMLDivElement>(null);
   const [tour, setTour] = useState<Tour>({
     tourId: '',
     title: '',
@@ -105,13 +148,19 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     }));
   }, []);
 
+  useEffect(() => {
+    if (currentStep === 3 && calendarInviteEditorRef.current) {
+      calendarInviteEditorRef.current.innerHTML = calendarInviteEditorHtml(tour.calendarInviteDetails ?? '');
+    }
+  }, [currentStep]);
+
   const isEditing = !!editingTour;
 
   const steps = [
     { number: 1, title: 'Basic Info', icon: FileText },
     { number: 2, title: 'Location', icon: MapPin },
-    { number: 3, title: 'Calendar Invite Details', icon: FileText },
-    { number: 4, title: 'Availability', icon: Calendar },
+    { number: 3, title: 'Calendar Invite Details', icon: Calendar },
+    { number: 4, title: 'Availability', icon: FileText },
     { number: 5, title: 'Scheduling Rules', icon: Settings },
     { number: 6, title: 'Review', icon: CheckCircle }
   ];
@@ -379,32 +428,62 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Location
-            </label>
-            <input
-              type="text"
-              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
-              placeholder="Enter the location that will appear on the calendar invite."
-              value={tour.calendarInviteLocation ?? ''}
-              onChange={(e) => updateTour({ calendarInviteLocation: e.target.value })}
-            />
-            <p className="text-xs 2xl:text-sm text-gray-500 mt-2">
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
               Description
             </label>
-            <textarea
-              rows={8}
-              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
-              placeholder="Enter any additional information you would like included in the calendar invite."
-              value={tour.calendarInviteDetails ?? ''}
-              onChange={(e) => updateTour({ calendarInviteDetails: e.target.value })}
-            />
-            <p className="text-xs 2xl:text-sm text-gray-500 mt-2">
-            </p>
+            <div className="rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+              <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-2 py-2">
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 text-sm font-bold text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Bold selected text"
+                  title="Bold"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    document.execCommand('bold');
+                    if (calendarInviteEditorRef.current) {
+                      updateTour({
+                        calendarInviteDetails: sanitizeCalendarInviteHtml(calendarInviteEditorRef.current.innerHTML),
+                      });
+                    }
+                  }}
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 text-sm font-medium text-blue-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Add hyperlink"
+                  title="Add hyperlink"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    const href = window.prompt('Enter the link URL (https://, http://, or mailto:)');
+                    if (href && /^(https?:|mailto:)/i.test(href.trim())) {
+                      document.execCommand('createLink', false, href.trim());
+                      if (calendarInviteEditorRef.current) {
+                        updateTour({
+                          calendarInviteDetails: sanitizeCalendarInviteHtml(calendarInviteEditorRef.current.innerHTML),
+                        });
+                      }
+                    }
+                  }}
+                >
+                  Link
+                </button>
+              </div>
+              <div
+                ref={calendarInviteEditorRef}
+                contentEditable
+                role="textbox"
+                aria-multiline="true"
+                className="min-h-48 px-3 py-2 text-sm 2xl:px-4 2xl:py-3 2xl:text-base focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 [&_a]:text-blue-600 [&_a]:underline"
+                data-placeholder="Enter any additional information you would like included in the calendar invite."
+                suppressContentEditableWarning
+                onInput={(event) => updateTour({
+                  calendarInviteDetails: sanitizeCalendarInviteHtml(event.currentTarget.innerHTML),
+                })}
+              />
+            </div>
+            <p className="mt-2 text-xs text-gray-500">Select text, then use Bold or Link to format it.</p>
           </div>
         </div>
       );
@@ -899,9 +978,14 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             
             <div className="mt-3 2xl:mt-4 pt-3 2xl:pt-4 border-t">
               <span className="font-medium text-gray-700 text-xs 2xl:text-sm">Calendar Invite Details:</span>
-              <p className="mt-2 text-xs 2xl:text-sm text-gray-900 whitespace-pre-wrap">
-                {tour.calendarInviteDetails || 'Using the default invite details for this tour type.'}
-              </p>
+              {tour.calendarInviteDetails ? (
+                <div
+                  className="mt-2 text-xs 2xl:text-sm text-gray-900 whitespace-pre-wrap [&_a]:text-blue-600 [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: calendarInviteEditorHtml(tour.calendarInviteDetails) }}
+                />
+              ) : (
+                <p className="mt-2 text-xs 2xl:text-sm text-gray-900">Using the default invite details for this tour type.</p>
+              )}
             </div>
 
             <div className="mt-3 2xl:mt-4 pt-3 2xl:pt-4 border-t">

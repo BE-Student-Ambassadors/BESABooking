@@ -44,6 +44,9 @@ interface CustomCalendarProps {
   minDate?: Date | null;
   maxDate?: Date | null;
   onVisibleRangeChange?: (rangeStart: string, rangeEnd: string) => void;
+  availabilityDates?: Record<string, boolean>;
+  availabilityRange?: { start: string; end: string } | null;
+  isLoadingAvailability?: boolean;
 }
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -93,6 +96,9 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
   minDate,
   maxDate,
   onVisibleRangeChange,
+  availabilityDates = {},
+  availabilityRange,
+  isLoadingAvailability = false,
 }) => {
   const getInitialWeekStart = () => {
     if (selectedDate) {
@@ -164,6 +170,36 @@ const CustomCalendar: React.FC<CustomCalendarProps> = ({
   useEffect(() => {
     onVisibleRangeChange?.(visibleRangeStart, visibleRangeEnd);
   }, [visibleRangeStart, visibleRangeEnd]);
+
+  useEffect(() => {
+    const hasLoadedVisibleRange =
+      availabilityRange?.start === visibleRangeStart && availabilityRange?.end === visibleRangeEnd;
+    const hasAvailableDate = displayedDays.some(
+      (date) => availabilityDates[formatDateString(date)] === true && !isDateDisabled(date)
+    );
+
+    if (
+      !tourData ||
+      isLoadingAvailability ||
+      !hasLoadedVisibleRange ||
+      hasAvailableDate ||
+      !canGoNextDesktop
+    ) {
+      return;
+    }
+
+    setCurrentWeekStart(nextDesktopPeriodStart);
+  }, [
+    availabilityDates,
+    availabilityRange,
+    canGoNextDesktop,
+    displayedDays,
+    isLoadingAvailability,
+    nextDesktopPeriodStart,
+    tourData,
+    visibleRangeEnd,
+    visibleRangeStart,
+  ]);
 
   return (
     <div className="h-90% border-2 border-blue-500 rounded-2xl p-6 bg-white shadow-lg">
@@ -553,6 +589,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const [besas, setBesas] = useState<BesaData[]>([]);
   const [calendarRange, setCalendarRange] = useState<{ start: string; end: string } | null>(null);
   const [availabilityDates, setAvailabilityDates] = useState<Record<string, boolean>>({});
+  const [isLoadingAvailabilityDates, setIsLoadingAvailabilityDates] = useState(false);
   const [selectedDateAvailability, setSelectedDateAvailability] = useState<AvailabilityResponse | null>(null);
   const [loadingSelectedDateAvailability, setLoadingSelectedDateAvailability] = useState(false);
 
@@ -606,10 +643,12 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   useEffect(() => {
     if (!bookingData.tourId || !calendarRange) {
       setAvailabilityDates({});
+      setIsLoadingAvailabilityDates(false);
       return;
     }
 
     let active = true;
+    setIsLoadingAvailabilityDates(true);
 
     fetchAvailabilityRange(bookingData.tourId, calendarRange.start, calendarRange.end)
       .then((response) => {
@@ -620,6 +659,10 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
         if (!active) return;
         console.error("Error fetching availability range:", error);
         setAvailabilityDates({});
+      })
+      .finally(() => {
+        if (!active) return;
+        setIsLoadingAvailabilityDates(false);
       });
 
     return () => {
@@ -1345,6 +1388,9 @@ const renderSectionIndicator = () => {
               }}
               minDate={minDate}
               maxDate={maxDate}
+              availabilityDates={availabilityDates}
+              availabilityRange={calendarRange}
+              isLoadingAvailability={isLoadingAvailabilityDates}
             />
             {errors.date && (
               <div className="flex items-center space-x-2">
@@ -1739,6 +1785,9 @@ const renderSectionIndicator = () => {
             }}
             minDate={minDate}
             maxDate={maxDate}
+            availabilityDates={availabilityDates}
+            availabilityRange={calendarRange}
+            isLoadingAvailability={isLoadingAvailabilityDates}
           />
           {errors.date && (
             <div className="flex items-center space-x-2 mt-2">
