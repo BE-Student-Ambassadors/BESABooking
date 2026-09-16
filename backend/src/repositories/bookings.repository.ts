@@ -77,7 +77,6 @@ export const bookingsRepository = {
         results.forEach((doc) => {
           const data = doc.data() as BookingData
           if (length != 0 && earliestBooking && new Date(data.date).getTime() < new Date(earliestBooking.date).getTime()) {
-            console.log(doc)
             earliestBooking = data
             earliestId = doc.id
           } else {

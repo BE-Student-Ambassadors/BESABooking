@@ -575,7 +575,6 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const selectTourById = (id: string) => {
     const t = tours.find(x => String(x.tourId) === String(id));
     if (!t) {
-      console.warn("Tour not found for id:", id, "Available:", tours.map(tt => tt.tourId));
       return;
     }
     setSelectedTour(t.tourId);
@@ -585,7 +584,6 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       tourType: t.title,
       maxAttendees: 1, // Always default to 1 when selecting a tour
     }));
-    console.log("Tour Selected", t.tourId);
   };
 
   const formatPhoneNumber = (value: string) => {
@@ -602,12 +600,10 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     if (errors[field as string]) {
       setErrors((prev) => ({ ...prev, [field as string]: "" }));
     }
-    console.log("Tour selected")
   };
 
   // Preselect the tour from param once tours are loaded
   useEffect(() => {
-    console.log("EFFECT deps -> preselectedTour:", preselectedTour, "tours.length:", tours.length);
     if (!preselectedTour || !tours.length) return;
     selectTourById(preselectedTour.trim());
   }, [preselectedTour, tours]);
@@ -1104,7 +1100,6 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       const response = await api.post("/api/bookings", bookingPayload);
       const savedBooking = response.data as BookingData;
       const bookingId = savedBooking.bookingId;
-      console.log("Booking saved with backend-assigned BESAs", savedBooking);
 
       const confirmationData = {
         id: bookingId,
@@ -1502,9 +1497,6 @@ const renderSectionIndicator = () => {
       if (maxDate && maxDate < minDate) {
         maxDate = minDate;
       }
-
-      console.log('Final date range - min:', minDate?.toDateString(), 'max:', maxDate?.toDateString());
-
 
       return { minDate, maxDate };
     };

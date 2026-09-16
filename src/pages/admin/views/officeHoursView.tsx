@@ -184,7 +184,6 @@ export default function OfficeHoursView() {
         compiledSchedule: Record<string, { timeSlots: { start: string; end: string; besas: string[] }[] }>;
       }>('/api/admin/office-hours');
       setCompiledSchedule(refreshed.data.compiledSchedule);
-      console.log('Office hours saved!');
     } catch (error) {
       console.error('Failed to save office hours:', error);
       alert('Failed to save changes. Please try again.');
