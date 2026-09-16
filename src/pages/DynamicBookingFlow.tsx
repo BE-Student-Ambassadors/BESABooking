@@ -553,6 +553,9 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     largeTourDetails: "",
   }
   const [bookingData, setBookingData] = useState<BookingDoc>(initialBook);
+  const bookingTourTitle = tours.find(
+    (tour) => tour.tourId === (bookingData.tourId || preselectedTour)
+  )?.title || bookingData.tourType || "Book a Tour";
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -2109,7 +2112,7 @@ const renderSection2 = () => {
               Back to Home
             </button>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 text-left sm:text-center flex-1">
-              Campus Tour Booking
+              {bookingTourTitle}
             </h1>
             <div className="w-24 hidden sm:block" />
           </div>
