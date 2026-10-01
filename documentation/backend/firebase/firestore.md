@@ -43,6 +43,15 @@ Core collections:
   - `supportedTourIds?`: array of `Tours` doc ids; empty or missing means the BESA can cover all tours
   - `officeHours`: map of day → `{ available: bool, timeSlots: [{ id, start, end }] }`
   - Legacy shapes may store `{ start, end }` per day; UI normalizes on read.
+  - `tempAdjustments?`: one-day replacement office hours (type `TempAdjustment`):
+    `{ id, date: 'YYYY-MM-DD', timeSlots: [{ id, start: 'HH:mm', end: 'HH:mm' }], reason?, createdAt: ISO string }`.
+    On that date, these slots replace the BESA's `officeHours` for that weekday. At most one per BESA per date.
+  - `tempUnavailability?`: time the BESA is out on one date (type `TempUnavailability`):
+    `{ id, date: 'YYYY-MM-DD', allDay: bool, start?: 'HH:mm', end?: 'HH:mm', reason?, createdAt: ISO string }`.
+    `start`/`end` are only set when `allDay` is false. Applied on top of whichever hours apply that day.
+  - A BESA counts toward a slot (public booking coverage and auto-assignment) only if that day's effective hours
+    cover the tour and no `tempUnavailability` overlaps it. Helpers live in `src/functions/besaTempSchedule.ts`.
+  - Legacy: an `adjustments` field (earlier name for `tempUnavailability`) is read if `tempUnavailability` is missing.
 
 ## Auth
 - Firebase Authentication protects admin routes (email/password + Google provider). No separate `users` collection is stored.

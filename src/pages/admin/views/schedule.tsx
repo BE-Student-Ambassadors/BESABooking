@@ -1,6 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../../src/firebase.ts';
+import {
+  getEffectiveDayHours,
+  getEntriesForDate,
+  normalizeTempAdjustments,
+  normalizeTempUnavailability,
+} from '../../../functions/besaTempSchedule.ts';
 import { Calendar, List } from 'lucide-react';
 
 export default function ScheduleView() {
@@ -126,7 +132,14 @@ export default function ScheduleView() {
               convertedOfficeHours[day] = (hours as OfficeHours) || { available: false, timeSlots: [] };
             }
           });
-          return { id: doc.id, ...data, officeHours: convertedOfficeHours } as Besa[];
+          return {
+            id: doc.id,
+            ...data,
+            officeHours: convertedOfficeHours,
+            tempAdjustments: normalizeTempAdjustments(data.tempAdjustments),
+            // `adjustments` was the field name before tempUnavailability existed
+            tempUnavailability: normalizeTempUnavailability(data.tempUnavailability ?? data.adjustments)
+          } as Besa[];
         }) as unknown as Besa[];
         setBesas(besasData);
       } catch (error) {
@@ -269,7 +282,19 @@ export default function ScheduleView() {
     [bookings, selectedDateKey]
   );
 
-  const selectedWeekday = format(selectedDate, 'EEEE').toLowerCase() as keyof Besa['officeHours'];
+  // Coverage for the selected date: tempAdjustment hours override the weekly hours,
+  // and any tempUnavailability that day is shown alongside.
+  const selectedDayCoverage = besas
+    .map(besa => ({
+      besa,
+      hours: getEffectiveDayHours(besa, selectedDateKey),
+      unavailability: getEntriesForDate(besa.tempUnavailability, selectedDateKey),
+    }))
+    .filter(({ hours }) => hours.available)
+    .sort((a, b) =>
+      Math.min(...a.hours.timeSlots.map(slot => toMinutes(slot.start)), Number.MAX_SAFE_INTEGER) -
+      Math.min(...b.hours.timeSlots.map(slot => toMinutes(slot.start)), Number.MAX_SAFE_INTEGER)
+    );
 
   // show “hasBooking” markers without UTC shift
   const dayHasBooking = (day: Date) => bookings.some(b => b.date === ymdKey(day));
@@ -455,23 +480,17 @@ export default function ScheduleView() {
                 {format(selectedDate, 'MMMM d, yyyy')} Coverage
               </h3>
               <div className="space-y-3">
-                {besas
-                  .filter(besa => besa.officeHours[selectedWeekday]?.available)
-                  .map(besa => ({
-                    besa,
-                    earliest: Math.min(
-                      ...(
-                        besa.officeHours[selectedWeekday].timeSlots.map(slot => toMinutes(slot.start)) || [Number.MAX_SAFE_INTEGER]
-                      )
-                    ),
-                  }))
-                  .sort((a, b) => a.earliest - b.earliest)
-                  .map(({ besa }) => (
-                    <div key={(besa as any).id} className="mb-2">
-                      <span className="text-sm text-gray-900 font-semibold">{(besa as any).name}</span>
-                      {besa.officeHours[selectedWeekday].timeSlots.length > 0 ? (
+                {selectedDayCoverage.map(({ besa, hours, unavailability }) => (
+                    <div key={besa.id} className="mb-2">
+                      <span className="text-sm text-gray-900 font-semibold">{besa.name}</span>
+                      {hours.adjusted && (
+                        <span className="ml-2 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                          Adjusted hours
+                        </span>
+                      )}
+                      {hours.timeSlots.length > 0 ? (
                         <div className="ml-2 flex flex-wrap gap-2 mt-1">
-                          {besa.officeHours[selectedWeekday].timeSlots
+                          {hours.timeSlots
                             .slice()
                             .sort((a, b) => toMinutes(a.start) - toMinutes(b.start))
                             .map(slot => (
@@ -486,9 +505,22 @@ export default function ScheduleView() {
                       ) : (
                         <span className="ml-2 text-xs text-gray-500">No time slots</span>
                       )}
+                      {unavailability.length > 0 && (
+                        <div className="ml-2 flex flex-wrap gap-2 mt-1">
+                          {unavailability.map(entry => (
+                            <span
+                              key={entry.id}
+                              className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded"
+                            >
+                              Out {entry.allDay ? 'all day' : `${formatTime12Hour(entry.start || '')} – ${formatTime12Hour(entry.end || '')}`}
+                              {entry.reason ? ` (${entry.reason})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
-                {besas.filter(besa => besa.officeHours[selectedWeekday]?.available).length === 0 && (
+                {selectedDayCoverage.length === 0 && (
                   <p className="text-gray-500">No BESA coverage for this day.</p>
                 )}
               </div>

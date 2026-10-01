@@ -3,6 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Calendar, Clock, Users, User, ArrowLeft, ArrowRight, Check, AlertCircle, GraduationCap, ChevronRight, ChevronLeft } from "lucide-react";
 import { collection, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from "../../src/firebase.ts";
+import {
+  getEffectiveDayHours,
+  isBlockedByUnavailability,
+  normalizeTempAdjustments,
+  normalizeTempUnavailability,
+} from "../functions/besaTempSchedule.ts";
 
 type BookingRecord = {
   tourId?: string;
@@ -567,6 +573,9 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
             role: docData.role,
             supportedTourIds: Array.isArray(docData.supportedTourIds) ? docData.supportedTourIds : [],
             officeHours: normalizeOfficeHours(docData.officeHours || {}),
+            tempAdjustments: normalizeTempAdjustments(docData.tempAdjustments),
+            // `adjustments` was the field name before tempUnavailability existed
+            tempUnavailability: normalizeTempUnavailability(docData.tempUnavailability ?? docData.adjustments),
           } as BesaData;
         });
         setBesas(data);
@@ -729,32 +738,16 @@ const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     return `${hour.toString().padStart(2, "0")}:${minute}`;
   };
 
-  const toLocalDate = (dateStr: string) => {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    return new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
-  };
-
-  const dayMapping = {
-    0: "sunday",
-    1: "monday",
-    2: "tuesday",
-    3: "wednesday",
-    4: "thursday",
-    5: "friday",
-    6: "saturday",
-  } as const;
-
   const isBesaAvailable = (besa: BesaData, bookingDate: string, bookingTime: string, durationMinutes = 0) => {
     if (!bookingDate || !bookingTime) return false;
-    const date = toLocalDate(bookingDate);
-    const dayOfWeek = date.getDay() as keyof typeof dayMapping;
-    const dayKey = dayMapping[dayOfWeek];
-    const dayHours = besa.officeHours[dayKey];
-    if (!dayHours || !dayHours.available || dayHours.timeSlots.length === 0) return false;
+    // Uses that date's tempAdjustment hours if any, otherwise the weekly office hours
+    const dayHours = getEffectiveDayHours(besa, bookingDate);
+    if ( !dayHours.available || dayHours.timeSlots.length === 0) return false;
     const bookingTime24 = parseTime12Hour(bookingTime);
     if (!bookingTime24) return false;
     const bookingStartMins = toMinutes(bookingTime24);
     const bookingEndMins = bookingStartMins + durationMinutes;
+    if (isBlockedByUnavailability(besa.tempUnavailability, bookingDate, bookingStartMins, bookingEndMins)) return false;
     return dayHours.timeSlots.some((slot) => {
       const slotStart = toMinutes(slot.start);
       const slotEnd = toMinutes(slot.end);
