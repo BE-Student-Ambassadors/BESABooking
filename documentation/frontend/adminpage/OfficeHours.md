@@ -4,13 +4,14 @@
 - **Purpose**: Manage BESA weekly office hours with per-day slots.
 
 ## Data Flow
-- Fetches **Besas** collection; normalizes `officeHours` to a consistent shape (per-day `available` + `timeSlots`).
-- Local state: `besas`, `editingOfficeHours` (besa id), `expandedBesas` (UI accordion).
+- Loads normalized BESA office hours and compiled weekly coverage from `GET /api/admin/office-hours`.
+- Local state: `besas`, `compiledSchedule`, `editingOfficeHours` (besa id), `expandedBesas` (UI accordion).
 
 ## Key UI / Actions
 - Expandable rows per BESA to view/edit office hours.
 - Toggle day availability; add/remove time slots with generated ids.
-- Save writes back to Firestore (`updateDoc` on `Besas/{id}`).
+- Save writes through `PATCH /api/besas/:besaId/office-hours`.
+- Compiled schedule summary is now provided by the backend response instead of being assembled in the page.
 - Time helpers for 12h/24h formatting.
 
 ## Extending

@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo, Dispatch, SetStateAction } from 'react';
+import { useState, useEffect, useMemo, useRef, Dispatch, SetStateAction } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Calendar, Clock, MapPin, Users, Settings, FileText, CheckCircle,Plus,X,Globe,Video,AlertCircle,Edit3,Trash2,Eye} from 'lucide-react';
 import { db } from "../../../../src/firebase.ts";
 import { collection, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
+import api from "../../../api";
+import { tourBannerOptions } from "../../../data/tourBannerOptions";
 
 {/* Create/Edit Tour Button adaptable for small screen */}
 {/* Allow to move order of tours (group first, etc) */}
@@ -48,21 +50,69 @@ const normalizeAvailabilityRanges = (tour?: Tour): AvailabilityRange[] => {
   return [createDefaultAvailabilityRange()];
 };
 
+const escapeHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;');
+
+const sanitizeCalendarInviteHtml = (html: string) => {
+  const documentBody = new DOMParser().parseFromString(html, 'text/html').body;
+  const allowedTags = new Set(['A', 'B', 'BR', 'DIV', 'P', 'STRONG']);
+
+  const sanitizeElement = (element: Element) => {
+    Array.from(element.children).forEach(sanitizeElement);
+
+    if (!allowedTags.has(element.tagName)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      return;
+    }
+
+    Array.from(element.attributes).forEach((attribute) => {
+      if (element.tagName !== 'A' || attribute.name !== 'href') {
+        element.removeAttribute(attribute.name);
+      }
+    });
+
+    if (element.tagName === 'A') {
+      const href = element.getAttribute('href') || '';
+      if (!/^(https?:|mailto:)/i.test(href)) {
+        element.replaceWith(...Array.from(element.childNodes));
+      }
+    }
+  };
+
+  Array.from(documentBody.children).forEach(sanitizeElement);
+  return documentBody.innerHTML;
+};
+
+const calendarInviteEditorHtml = (value: string) => {
+  const containsSupportedHtml = /<\/?(?:a|b|br|div|p|strong)\b/i.test(value);
+  return containsSupportedHtml
+    ? sanitizeCalendarInviteHtml(value)
+    : escapeHtml(value).replace(/\n/g, '<br>');
+};
+
 function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour?: Tour; onSaveTour: (tour: Tour) => void;}) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [tour, setTour] = useState<Tour>(editingTour || {
+  const calendarInviteEditorRef = useRef<HTMLDivElement>(null);
+  const [tour, setTour] = useState<Tour>({
     tourId: '',
     title: '',
     description: '',
     duration: 60,
     durationUnit: 'minutes',
     maxAttendeesPerBooking: 5,
+    bookingNotice: '',
+    bannerImageUrl: '',
     maxBookings: 3,
     location: '',
     zoomLink: '',
     autoGenerateZoom: false,
     weeklyHours: {},
     availabilityRanges: [createDefaultAvailabilityRange()],
+    allowConcurrentTours: false,
+    disableAutoAssignBesas: false,
+    googleCalendarId: '',
     dateSpecificBlockDays: [],
     dateSpecificDays: [],
     frequency: 60,
@@ -86,7 +136,10 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     },
     reminderEmails: [{ timing: 24, unit: 'hours' }],
     sessionInstructions: '',
-    published: false
+    published: false,
+    ...editingTour,
+    calendarInviteLocation: editingTour?.calendarInviteLocation ?? '',
+    calendarInviteDetails: editingTour?.calendarInviteDetails ?? '',
   });
 
   useEffect(() => {
@@ -96,14 +149,21 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
     }));
   }, []);
 
+  useEffect(() => {
+    if (currentStep === 3 && calendarInviteEditorRef.current) {
+      calendarInviteEditorRef.current.innerHTML = calendarInviteEditorHtml(tour.calendarInviteDetails ?? '');
+    }
+  }, [currentStep]);
+
   const isEditing = !!editingTour;
 
   const steps = [
     { number: 1, title: 'Basic Info', icon: FileText },
     { number: 2, title: 'Location', icon: MapPin },
-    { number: 3, title: 'Availability', icon: Calendar },
-    { number: 4, title: 'Scheduling Rules', icon: Settings },
-    { number: 5, title: 'Review', icon: CheckCircle }
+    { number: 3, title: 'Calendar Invite Details', icon: Calendar },
+    { number: 4, title: 'Availability', icon: FileText },
+    { number: 5, title: 'Scheduling Rules', icon: Settings },
+    { number: 6, title: 'Review', icon: CheckCircle }
   ];
 
   const updateTour = (updates: Partial<Tour>) => {
@@ -249,6 +309,45 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               />
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Booking Notice</label>
+            <textarea
+              rows={3}
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base resize-y"
+              placeholder="For example: One booking per person. If your party has multiple people, please make a separate booking for each person."
+              value={tour.bookingNotice || ''}
+              onChange={(e) => updateTour({ bookingNotice: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-gray-500">Shown above the date calendar only when this tour is selected.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tour Banner</label>
+            <select
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+              value={tourBannerOptions.some((option) => option.url === tour.bannerImageUrl) ? tour.bannerImageUrl : ''}
+              onChange={(e) => updateTour({ bannerImageUrl: e.target.value })}
+            >
+              <option value="">Choose an image from the banner library</option>
+              {tourBannerOptions.map((option) => (
+                <option key={option.url} value={option.url}>{option.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Repository banners are stored in `public/tour-banners` and listed in `src/data/tourBannerOptions.ts`.</p>
+            {tour.bannerImageUrl && (
+              <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                <img src={tour.bannerImageUrl} alt="Tour banner preview" className="h-auto w-full" />
+                <button
+                  type="button"
+                  onClick={() => updateTour({ bannerImageUrl: '' })}
+                  className="m-3 text-sm font-medium text-red-600 hover:text-red-700"
+                >
+                  Remove banner
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       );
 
@@ -291,12 +390,145 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               onChange={(e) => updateTour({ zoomLink: e.target.value, autoGenerateZoom: false })}
             />
           </div>
+
         </div>
       );
 
     case 3:
+      return (
+        <div className="space-y-4 2xl:space-y-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 2xl:p-4">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="h-4 w-4 2xl:h-5 2xl:w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs 2xl:text-sm text-blue-800">
+                Leave any field blank to use the default BESA tour settings.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 2xl:p-4">
+            <label htmlFor="google-calendar-id" className="block text-sm font-medium text-gray-700 mb-2">
+              Save Bookings To
+            </label>
+            <input
+              id="google-calendar-id"
+              list="google-calendar-options"
+              type="text"
+              className="w-full px-3 2xl:px-4 py-2 2xl:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm 2xl:text-base"
+              placeholder="primary or a Google Calendar ID"
+              value={tour.googleCalendarId || ''}
+              onChange={(e) => updateTour({ googleCalendarId: e.target.value.trim() })}
+            />
+            <datalist id="google-calendar-options">
+              <option value="primary">Primary calendar</option>
+            </datalist>
+            <p className="text-xs text-gray-500 mt-2">
+              Enter <code>primary</code> for the BESA Tours calendar, or enter another Google Calendar ID.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
+            </label>
+            <div className="rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+              <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-2 py-2">
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 text-sm font-bold text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Bold selected text"
+                  title="Bold"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    document.execCommand('bold');
+                    if (calendarInviteEditorRef.current) {
+                      updateTour({
+                        calendarInviteDetails: sanitizeCalendarInviteHtml(calendarInviteEditorRef.current.innerHTML),
+                      });
+                    }
+                  }}
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  className="rounded px-2 py-1 text-sm font-medium text-blue-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Add hyperlink"
+                  title="Add hyperlink"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    const href = window.prompt('Enter the link URL (https://, http://, or mailto:)');
+                    if (href && /^(https?:|mailto:)/i.test(href.trim())) {
+                      document.execCommand('createLink', false, href.trim());
+                      if (calendarInviteEditorRef.current) {
+                        updateTour({
+                          calendarInviteDetails: sanitizeCalendarInviteHtml(calendarInviteEditorRef.current.innerHTML),
+                        });
+                      }
+                    }
+                  }}
+                >
+                  Link
+                </button>
+              </div>
+              <div
+                ref={calendarInviteEditorRef}
+                contentEditable
+                role="textbox"
+                aria-multiline="true"
+                className="min-h-48 px-3 py-2 text-sm 2xl:px-4 2xl:py-3 2xl:text-base focus:outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 [&_a]:text-blue-600 [&_a]:underline"
+                data-placeholder="Enter any additional information you would like included in the calendar invite."
+                suppressContentEditableWarning
+                onInput={(event) => updateTour({
+                  calendarInviteDetails: sanitizeCalendarInviteHtml(event.currentTarget.innerHTML),
+                })}
+              />
+            </div>
+            <p className="mt-2 text-xs text-gray-500">Select text, then use Bold or Link to format it.</p>
+          </div>
+        </div>
+      );
+
+    case 4:
   return (
   <div className="space-y-6 2xl:space-y-8">
+
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+      <button
+        type="button"
+        aria-pressed={tour.disableAutoAssignBesas ?? false}
+        onClick={() => updateTour({ disableAutoAssignBesas: !tour.disableAutoAssignBesas })}
+        className={`rounded-lg border px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+          tour.disableAutoAssignBesas
+            ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700'
+            : 'border-blue-300 bg-white text-blue-700 hover:bg-blue-100'
+        }`}
+      >
+        Disable auto-assigning BESAs
+      </button>
+      <p className="mt-2 text-xs text-gray-600">
+        {tour.disableAutoAssignBesas
+          ? 'Auto-assignment is disabled. Assign BESAs manually for this tour.'
+          : 'Auto-assignment is enabled. Disable it for tours that need manual BESA assignments.'}
+      </p>
+    </div>
+
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+      <label className="flex items-start space-x-3">
+        <input
+          type="checkbox"
+          checked={tour.allowConcurrentTours ?? false}
+          onChange={(e) => updateTour({ allowConcurrentTours: e.target.checked })}
+          className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        <div>
+          <span className="block text-sm font-medium text-gray-900">Allow tours at the same time</span>
+          <p className="mt-1 text-xs text-gray-600">
+            Allow this tour to run at the same time as other tour types.
+          </p>
+        </div>
+      </label>
+    </div>
 
     {/* Availability Ranges */}
     <div>
@@ -542,7 +774,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                 : 'bg-gray-100 text-gray-600'
             }`}
           >
-            {dateOverride.appliesToAllTours ? 'Universal: ON' : 'Universal: OFF'}
+            {dateOverride.appliesToAllTours ? 'Apply to All Tours: ON' : 'Apply to All Tours: OFF'}
           </button>
           <span className="text-xs text-gray-600">Applies to all tours</span>
         </div>
@@ -627,8 +859,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
   </div>
 );
 
-
-    case 4:
+    case 5:
       return (
         <div className="space-y-4 2xl:space-y-6">
           <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 2xl:gap-6">
@@ -701,7 +932,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
         </div>
       );
 
-    case 5:
+    case 6:
       return (
         <div className="space-y-4 2xl:space-y-6">
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 2xl:p-6 text-center">
@@ -740,10 +971,24 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                   {tour.location || (tour.autoGenerateZoom ? 'Virtual (Zoom)' : tour.zoomLink ? 'Virtual' : 'Not set')}
                 </span>
               </div>
+
+              <div>
+                <span className="font-medium text-gray-700">Invite Location:</span>
+                <span className="ml-2 text-gray-900 break-words">
+                  {tour.calendarInviteLocation || tour.location || (tour.autoGenerateZoom ? 'Virtual (Zoom)' : tour.zoomLink ? 'Virtual' : 'Default')}
+                </span>
+              </div>
               
               <div>
                 <span className="font-medium text-gray-700">Frequency:</span>
                 <span className="ml-2 text-gray-900">Every {tour.frequency} {tour.frequencyUnit}</span>
+              </div>
+
+              <div>
+                <span className="font-medium text-gray-700">Overlap Rule:</span>
+                <span className="ml-2 text-gray-900">
+                  {tour.allowConcurrentTours ? 'Can overlap with other enabled tours' : 'Cannot overlap with other tours'}
+                </span>
               </div>
               
               <div>
@@ -753,6 +998,21 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             </div>
             
             <div className="mt-3 2xl:mt-4 pt-3 2xl:pt-4 border-t">
+              <span className="font-medium text-gray-700 text-xs 2xl:text-sm">Calendar Invite Details:</span>
+              {tour.calendarInviteDetails ? (
+                <div
+                  className="mt-2 text-xs 2xl:text-sm text-gray-900 whitespace-pre-wrap [&_a]:text-blue-600 [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: calendarInviteEditorHtml(tour.calendarInviteDetails) }}
+                />
+              ) : (
+                <p className="mt-2 text-xs 2xl:text-sm text-gray-900">Using the default invite details for this tour type.</p>
+              )}
+            </div>
+
+            <div className="mt-3 2xl:mt-4 pt-3 2xl:pt-4 border-t">
+              <p className="mb-3 text-xs 2xl:text-sm text-gray-900">
+                BESA auto-assignment: {tour.disableAutoAssignBesas ? 'Disabled (manual assignment)' : 'Enabled'}
+              </p>
               <span className="font-medium text-gray-700 text-xs 2xl:text-sm">Availability Ranges:</span>
               <div className="mt-2 space-y-4">
                 {(tour.availabilityRanges || []).map((range, rangeIndex) => (
@@ -823,11 +1083,11 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
 
       if (isEditing && tourToSave.tourId) {
         const { tourId, ...updateData } = normalizedTour;
-        await updateDoc(doc(db, "Tours", tourId), updateData);
+        await api.patch(`/api/tours/${tourId}`, updateData);
         alert('Tour updated!');
       } else {
         const { tourId, ...newTourData } = normalizedTour;
-        await addDoc(collection(db, "Tours"), {
+        await api.post('/api/tours', {
           ...newTourData,
           createdAt: new Date().toISOString().split('T')[0],
           upcomingBookings: 0,
@@ -935,18 +1195,21 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
               <p className="text-gray-600">Where will this tour take place? Choose in-person, virtual, or both.</p>
             )}
             {currentStep === 3 && (
-              <p className="text-gray-600">Set up when this tour will be available for booking.</p>
+              <p className="text-gray-600">Customize the Google Calendar invite guests receive when they book this tour.</p>
             )}
             {currentStep === 4 && (
-              <p className="text-gray-600">Configure booking rules and policies for this tour.</p>
+              <p className="text-gray-600">Set up when this tour will be available for booking.</p>
             )}
             {currentStep === 5 && (
+              <p className="text-gray-600">Configure booking rules and policies for this tour.</p>
+            )}
+            {currentStep === 6 && (
               <p className="text-gray-600">Review everything and publish your tour.</p>
             )}
           </div>
 
-          {/* Step Content */}
-          <div className="mb-8">
+          {/* Remount each step so the invite editor's HTML cannot carry into other fields. */}
+          <div key={currentStep} className="mb-8">
             {renderStepContent()}
           </div>
 
@@ -1023,6 +1286,14 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
       ).values()
     ).sort((a, b) => `${a.start}|${a.end}`.localeCompare(`${b.start}|${b.end}`));
 
+  const formatTime12Hour = (time24: string) => {
+    if (!time24 || !time24.includes(':')) return time24;
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = ((hours + 11) % 12) + 1;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
   const [searchTerm] = useState('');
   const [filterStatus] = useState<'all' | 'published' | 'draft'>('all');
   const [reordering, setReordering] = useState(false);
@@ -1042,25 +1313,22 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     (a.displayOrder ?? Number.MAX_SAFE_INTEGER) - (b.displayOrder ?? Number.MAX_SAFE_INTEGER);
 
   useEffect(() => {
-    const toursRef = collection(db, "Tours");
+    const fetchTours = async () => {
+      try {
+        const response = await api.get<Tour[]>('/api/tours');
+        const orderedTours = [...response.data]
+          .map((tour, index) => ({
+            ...tour,
+            displayOrder: tour.displayOrder ?? index,
+          }))
+          .sort(sortByDisplayOrder);
+        setTours(orderedTours);
+      } catch (error) {
+        console.error('Error fetching tours:', error);
+      }
+    };
 
-    const unsubscribe = onSnapshot(toursRef, (snapshot) => {
-      const tourData = snapshot.docs.map((doc) => ({
-        tourId: doc.id,
-        ...doc.data(),
-      })) as Tour[];
-
-      const orderedTours = [...tourData]
-        .map((tour, index) => ({
-          ...tour,
-          displayOrder: tour.displayOrder ?? index,
-        }))
-        .sort(sortByDisplayOrder);
-
-      setTours(orderedTours);
-    });
-
-    return () => unsubscribe();
+    void fetchTours();
   }, [setTours]);
 
   // const updateTour = async (updatedTour: Tour) => {
@@ -1074,18 +1342,27 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   //   }
   // };
 
+  const formatDateOnly = (dateValue: string) => {
+    const [year, month, day] = dateValue.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
   const getDateRange = (tour: Tour) => {
     if (tour.availabilityRanges?.length) {
       const labels = tour.availabilityRanges
         .filter((range) => range.startDate || range.endDate)
         .map((range) => {
           if (range.startDate && range.endDate) {
-            const start = new Date(range.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            const end = new Date(range.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const start = formatDateOnly(range.startDate);
+            const end = formatDateOnly(range.endDate);
             return `${start} - ${end}`;
           }
           if (range.startDate) {
-            const start = new Date(range.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const start = formatDateOnly(range.startDate);
             return `From ${start}`;
           }
           return null;
@@ -1096,11 +1373,11 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     }
 
     if (tour.startDate && tour.endDate) {
-      const start = new Date(tour.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      const end = new Date(tour.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const start = formatDateOnly(tour.startDate);
+      const end = formatDateOnly(tour.endDate);
       return `${start} - ${end}`;
     } else if (tour.startDate) {
-      const start = new Date(tour.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const start = formatDateOnly(tour.startDate);
       return `From ${start}`;
     }
     return "No dates set";
@@ -1109,7 +1386,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
   const handleDeleteTour = async (tourId: string) => {
     if (confirm("Are you sure you want to delete this tour? This action cannot be undone.")) {
       try {
-        await deleteDoc(doc(db, "Tours", tourId));
+        await api.delete(`/api/tours/${tourId}`);
         setTours(tours.filter((tour) => tour.tourId !== tourId));
       } catch (err) {
         console.error("Error deleting tour:", err);
@@ -1121,8 +1398,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     const tour = tours.find((t) => t.tourId === tourId);
     if (!tour) return;
     try {
-      const tourRef = doc(db, "Tours", tourId);
-      await updateDoc(tourRef, { published: !tour.published });
+      await api.patch(`/api/tours/${tourId}/publish`);
       setTours(
         tours.map((t) =>
           t.tourId === tourId ? { ...t, published: !t.published } : t
@@ -1149,7 +1425,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     try {
       await Promise.all(
         updated.map(t =>
-          updateDoc(doc(db, "Tours", t.tourId), { displayOrder: t.displayOrder ?? 0 })
+          api.patch(`/api/tours/${t.tourId}`, { displayOrder: t.displayOrder ?? 0 })
         )
       );
     } catch (err) {
@@ -1204,6 +1480,14 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
     return Object.values(map).sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
   }, [tours]);
 
+  const today = new Date();
+  const todayDate = new Date(today.getTime() - today.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+  const currentUniversalOverrides = universalOverrides.filter(
+    (dateOverride) => (dateOverride.endDate || dateOverride.startDate) >= todayDate
+  );
+
   const addUniversalHoliday = async () => {
     if (!globalHolidayForm.startDate) {
       alert('Please select a start date');
@@ -1250,7 +1534,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
           } else {
             updated.push(newOverride);
           }
-          await updateDoc(doc(db, 'Tours', tour.tourId), { dateSpecificBlockDays: updated });
+          await api.patch(`/api/tours/${tour.tourId}`, { dateSpecificBlockDays: updated });
         })
       );
       setTours((prev: Tour[]) =>
@@ -1304,7 +1588,7 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                 (d.endDate || d.startDate) === (endDate || startDate)
               )
           );
-          await updateDoc(doc(db, 'Tours', tour.tourId), { dateSpecificBlockDays: filtered });
+          await api.patch(`/api/tours/${tour.tourId}`, { dateSpecificBlockDays: filtered });
         })
       );
       setTours(prev =>
@@ -1486,10 +1770,10 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
             <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-blue-600" />
-                Block Out Dates
+                Unavailable Dates
               </h3>
               <p className="text-sm text-gray-600 mt-1">
-                Dates marked apply to all tours.
+                Set dates or times when no tours will be available.
               </p>
 
               <div className="mt-4 space-y-2">
@@ -1600,12 +1884,12 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
               </div>
 
               <div className="mt-6">
-                <h4 className="text-sm font-semibold text-gray-800 mb-2">Existing dates</h4>
-                {universalOverrides.length === 0 ? (
-                  <p className="text-sm text-gray-500">None set yet.</p>
+                <h4 className="text-sm font-semibold text-gray-800 mb-2">Upcoming Unavailable Dates</h4>
+                {currentUniversalOverrides.length === 0 ? (
+                  <p className="text-sm text-gray-500">No current or upcoming dates.</p>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {universalOverrides.map((d) => (
+                    {currentUniversalOverrides.map((d) => (
                       <div
                         key={`${d.startDate}|${d.endDate || d.startDate}`}
                         className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm"
@@ -1617,18 +1901,18 @@ function ToursDashboard({ onCreateTour, onEditTour, tours, setTours }: {
                           </div>
                           {d.blockedTimes && d.blockedTimes.length > 0 && (
                             <div className="text-xs text-amber-700 mt-1">
-                              Blocked times: {d.blockedTimes.join(', ')}
+                              Blocked times: {d.blockedTimes.map(formatTime12Hour).join(', ')}
                             </div>
                           )}
                           {d.blockedRanges && d.blockedRanges.length > 0 && (
                             <div className="text-xs text-amber-700 mt-1">
-                              Blocked ranges: {d.blockedRanges.map((range) => `${range.start} - ${range.end}`).join(', ')}
+                              Blocked ranges: {d.blockedRanges.map((range) => `${formatTime12Hour(range.start)} - ${formatTime12Hour(range.end)}`).join(', ')}
                             </div>
                           )}
                           {d.slots && d.slots.length > 0 && (
                             <div className="text-xs text-gray-600 mt-1">
                               {d.slots.map((s: any, i: number) => (
-                                <span key={i} className="inline-block mr-2">{s.start} - {s.end}</span>
+                                <span key={i} className="inline-block mr-2">{formatTime12Hour(s.start)} - {formatTime12Hour(s.end)}</span>
                               ))}
                             </div>
                           )}

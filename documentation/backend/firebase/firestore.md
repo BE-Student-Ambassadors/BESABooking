@@ -1,6 +1,6 @@
 # Firestore Data Model
 
-The app reads/writes Firestore directly from the React client (no Cloud Functions). 
+The project still uses Firestore as the main data store, but admin-page reads/writes are now routed through the Express backend. Public booking flows still include direct client-side Firestore usage.
 
 Core collections:
 
@@ -50,7 +50,9 @@ Core collections:
     `{ id, date: 'YYYY-MM-DD', allDay: bool, start?: 'HH:mm', end?: 'HH:mm', reason?, createdAt: ISO string }`.
     `start`/`end` are only set when `allDay` is false. Applied on top of whichever hours apply that day.
   - A BESA counts toward a slot (public booking coverage and auto-assignment) only if that day's effective hours
-    cover the tour and no `tempUnavailability` overlaps it. Helpers live in `src/functions/besaTempSchedule.ts`.
+    cover the tour and no `tempUnavailability` overlaps it. Enforced in the backend (`availability.service.ts`,
+    `assignment.service.ts`); helpers live in `backend/src/utils/besaTempSchedule.ts` with a frontend copy in
+    `src/functions/besaTempSchedule.ts` (keep them in sync). Tours with `disableAutoAssignBesas` skip the coverage check.
   - Legacy: an `adjustments` field (earlier name for `tempUnavailability`) is read if `tempUnavailability` is missing.
 
 ## Auth
@@ -59,5 +61,6 @@ Core collections:
 ## Tips for Changes
 - When adding new fields, update:
   1) Type definitions (`src/types/global.d.ts`)
-  2) Firestore write locations (e.g., `toursManagement.tsx`, booking flows)
-  3) Any stats/derived calculations (dashboard, schedule)
+  2) Backend repository/service/controller layers for admin-owned flows
+  3) Public booking Firestore write locations where applicable
+  4) Any stats/derived calculations (dashboard, schedule, BESA rollups)

@@ -1,6 +1,6 @@
 # Dashboard Backend
 
-The Dashboard page reads from Firestore and derives summary information in the client.
+The Dashboard is served through the admin backend.
 
 ## Data Used
 
@@ -10,5 +10,14 @@ The Dashboard page reads from Firestore and derives summary information in the c
 
 ## Backend Behavior
 
-- No dedicated server endpoint powers the dashboard.
-- All summary counts and list warnings are derived client-side after Firestore reads.
+- `GET /api/admin/dashboard`
+  - Returns dashboard bookings, tours, BESAs, and summary stats.
+  - Normalizes booking and BESA data for admin UI consumption.
+- `POST /api/admin/bookings/assignments`
+  - Runs BESA assignment logic on the server.
+  - Filters by active BESAs, supported tours, and office-hours availability.
+  - Applies role-based priority ordering and caps results at two BESAs.
+- `PATCH /api/admin/bookings/:bookingId`
+  - Updates dashboard-edited bookings.
+- `DELETE /api/admin/bookings/:bookingId`
+  - Deletes dashboard bookings.

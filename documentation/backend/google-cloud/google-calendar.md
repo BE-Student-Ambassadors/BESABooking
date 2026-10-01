@@ -1,31 +1,28 @@
 # Google Calendar Integration
 
-Calendar invites are created client-side via the Google Calendar REST API and Google Identity Services (GIS).
+Booking events are synchronized from Firestore by the Firebase Functions project in the separate `besabookingapi` repository.
 
-- **Code**: `src/calendarAPI.tsx`
-- **Dependencies**: `googleapis` (for potential server-side use), GIS script loaded in browser.
+- **Code**: `besabookingapi/functions/src/index.ts`
+- **Dependencies**: Firebase Functions and `googleapis`
 
-## Token Flow
-1) `getCalendarAccessToken(clientId)` loads GIS (`https://accounts.google.com/gsi/client`).
-2) GIS `initTokenClient` requests scope `https://www.googleapis.com/auth/calendar.events`.
-3) Returns an access token; consent shown on first call.
+## Event Flow
+1) The booking flow writes the booking to Firestore.
+2) The `onBookingCreated` Firebase Function loads the tour and reads its `googleCalendarId`.
+3) It inserts the event into that calendar using the configured Calendar OAuth account.
+4) It writes `calendarEventId`, `calendarSyncCalendarId`, and sync metadata back to the booking.
 
 ## Creating Invites
-- `insertCalendarEvent({ accessToken, summary, description?, location?, startISO, endISO, calendarId?, attendeeEmail?, attendeeName?, timezone? })`
-- Posts to `https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events?sendUpdates=all`
-- Sets attendee, disables guest modifications, uses default reminders.
+- The Firebase Function uses the Google Calendar `events.insert` API with its OAuth account, so attendee invitations are supported.
+- Set `googleCalendarId` per tour in the admin Availability step. Use `primary` or the destination calendar's ID.
+- The function reads the calendar ID from the saved tour, rather than trusting a browser-provided value.
 
 ## Where It’s Used
-- Booking flows can call `insertCalendarEvent` after a booking is confirmed, passing attendee email and BESA (as `attendeeName`) if desired.
-- BESA assignment updates can trigger a new event or update workflow (not implemented yet; add a docstring in code when adding).
+- New bookings create an event after the Firestore booking is saved.
+- Booking updates and deletes update or remove the synchronized event in the same calendar.
 
 ## Console Setup
-- Create OAuth 2.0 Client ID (Web) in Google Cloud Console.
-- Authorized JS origins: your deployed domains and `http://localhost:5173` (vite dev) or equivalent.
-- Authorized redirect URIs: not needed for token client (uses popup), but keep your app domain whitelisted.
-- Store the client id in env/config and pass to `getCalendarAccessToken`.
+- Configure the `CALENDAR_CLIENT_ID`, `CALENDAR_CLIENT_SECRET`, and `CALENDAR_REFRESH_TOKEN` Firebase Function secrets in `besabookingapi`.
+- Share each destination calendar, including Slugworks, with the Google account that authorized the refresh token and give it permission to create events.
 
 ## Extending
-- Add event updates/cancellations: use `PATCH /events/{id}` or `DELETE /events/{id}` with the same token.
-- Persist `googleEventId` on the booking document to support edits/cancels.
-- If moving logic server-side, use a service account with domain-wide delegation and keep tokens off the client.
+- Deploy the Firebase Functions after changing their source or secrets.

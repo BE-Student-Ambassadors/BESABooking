@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Edit3, Save, Plus, Trash2, ChevronDown, ChevronRight, CalendarX, CalendarClock, History } from 'lucide-react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../../../src/firebase.ts';
+import api from '../../../api';
 import {
   generateTempId,
   getDayKeyForDate,
   getLocalDateString,
-  normalizeTempAdjustments,
-  normalizeTempUnavailability,
   sortByDate,
   splitByDate,
 } from '../../../functions/besaTempSchedule.ts';
@@ -62,6 +59,7 @@ const emptyUnavailabilityDraft = (): UnavailabilityDraft => ({
 
 export default function OfficeHoursView() {
   const [besas, setBesas] = useState<Besa[]>([]);
+  const [compiledSchedule, setCompiledSchedule] = useState<Record<string, { timeSlots: { start: string; end: string; besas: string[] }[] }>>({});
   const [editingOfficeHours, setEditingOfficeHours] = useState<string | null>(null);
   const [expandedBesas, setExpandedBesas] = useState<Set<string>>(new Set());
   const [adjustmentDrafts, setAdjustmentDrafts] = useState<Record<string, AdjustmentDraft>>({});
@@ -83,54 +81,21 @@ export default function OfficeHoursView() {
   };
 
   useEffect(() => {
-  const fetchBesas = async () => {
-    const snapshot = await getDocs(collection(db, 'Besas'));
-    const besaData = snapshot.docs.map(doc => {
-      const data = doc.data() as Omit<Besa, 'id'>;
+    const fetchOfficeHoursData = async () => {
+      try {
+        const response = await api.get<{
+          besas: Besa[];
+          compiledSchedule: Record<string, { timeSlots: { start: string; end: string; besas: string[] }[] }>;
+        }>('/api/admin/office-hours');
+        setBesas(response.data.besas);
+        setCompiledSchedule(response.data.compiledSchedule);
+      } catch (error) {
+        console.error('Error fetching office hours data:', error);
+      }
+    };
 
-      const convertedOfficeHours: { [day: string]: DayHours } = {};
-      Object.entries(data.officeHours || {}).forEach(([day, hours]) => {
-        if (typeof hours === 'object' && 'start' in hours && 'end' in hours) {
-          convertedOfficeHours[day] = {
-            available: !!hours.available,
-            timeSlots: hours.available ? [{
-              id: generateId(),
-              start: typeof hours.start === 'string' ? hours.start : '09:00',
-              end: typeof hours.end === 'string' ? hours.end : '17:00'
-            }] : []
-          };
-        } else if (typeof hours === 'object' && 'timeSlots' in hours) {
-          convertedOfficeHours[day] = {
-            available: !!hours.available,
-            timeSlots: Array.isArray(hours.timeSlots)
-              ? hours.timeSlots.map((slot: any) => ({
-                  id: typeof slot.id === 'string' ? slot.id : generateId(),
-                  start: typeof slot.start === 'string' ? slot.start : '09:00',
-                  end: typeof slot.end === 'string' ? slot.end : '17:00'
-                }))
-              : []
-          };
-        } else {
-          convertedOfficeHours[day] = {
-            available: false,
-            timeSlots: []
-          };
-        }
-      });
-
-      return {
-        id: doc.id,
-        ...data,
-        officeHours: convertedOfficeHours,
-        tempAdjustments: normalizeTempAdjustments(doc.data().tempAdjustments),
-        // `adjustments` was the field name before tempUnavailability existed
-        tempUnavailability: normalizeTempUnavailability(doc.data().tempUnavailability ?? doc.data().adjustments),
-      };
-    });
-    setBesas(besaData);
-  };
-  fetchBesas();
-}, []);
+    void fetchOfficeHoursData();
+  }, []);
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -170,41 +135,6 @@ export default function OfficeHoursView() {
       }
       return newSet;
     });
-  };
-
-  const getCompiledSchedule = () => {
-    const schedule: { [key: string]: { timeSlots: { start: string; end: string; besas: string[] }[] } } = {};
-
-    orderedDays.forEach(day => {
-      const availableBesas = besas.filter(besa =>
-        besa.officeHours?.[day]?.available && besa.officeHours[day].timeSlots.length > 0
-      );
-
-      if (availableBesas.length > 0) {
-        const allTimeSlots: { start: string; end: string; besas: string[] }[] = [];
-        
-        availableBesas.forEach(besa => {
-          besa.officeHours[day].timeSlots.forEach(slot => {
-            const existingSlot = allTimeSlots.find(s => s.start === slot.start && s.end === slot.end);
-            if (existingSlot) {
-              existingSlot.besas.push(besa.name);
-            } else {
-              allTimeSlots.push({
-                start: slot.start,
-                end: slot.end,
-                besas: [besa.name]
-              });
-            }
-          });
-        });
-
-        allTimeSlots.sort((a, b) => a.start.localeCompare(b.start));
-        
-        schedule[day] = { timeSlots: allTimeSlots };
-      }
-    });
-
-    return schedule;
   };
 
   const addTimeSlot = (besaId: string, day: string) => {
@@ -283,11 +213,21 @@ export default function OfficeHoursView() {
 
   const saveOfficeHoursChanges = async (besa: Besa) => {
     try {
-      const besaDocRef = doc(db, 'Besas', besa.id);
-      await updateDoc(besaDocRef, {
+      const response = await api.patch(`/api/besas/${besa.id}/office-hours`, {
         officeHours: besa.officeHours,
       });
-      console.log('Office hours saved!');
+      const updatedBesa = response.data as Besa;
+      // The response is the raw Firestore doc; keep the normalized temp-change arrays from local state.
+      setBesas((prev) => prev.map((entry) => (
+        entry.id === besa.id
+          ? { ...updatedBesa, tempAdjustments: entry.tempAdjustments, tempUnavailability: entry.tempUnavailability }
+          : entry
+      )));
+      const refreshed = await api.get<{
+        besas: Besa[];
+        compiledSchedule: Record<string, { timeSlots: { start: string; end: string; besas: string[] }[] }>;
+      }>('/api/admin/office-hours');
+      setCompiledSchedule(refreshed.data.compiledSchedule);
     } catch (error) {
       console.error('Failed to save office hours:', error);
       alert('Failed to save changes. Please try again.');
@@ -336,7 +276,7 @@ export default function OfficeHoursView() {
   ) => {
     setSavingTempFor(besaId);
     try {
-      await updateDoc(doc(db, 'Besas', besaId), updates);
+      await api.patch(`/api/besas/${besaId}/temp-schedule`, updates);
       setBesas(prev => prev.map(besa => (besa.id === besaId ? { ...besa, ...updates } : besa)));
       return true;
     } catch (err) {
@@ -453,8 +393,6 @@ export default function OfficeHoursView() {
       splitByDate(besa.tempUnavailability, today).upcoming
     ))
     .sort((a, b) => a.date.localeCompare(b.date) || a.besaName.localeCompare(b.besaName));
-
-  const compiledSchedule = getCompiledSchedule();
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -592,10 +530,7 @@ export default function OfficeHoursView() {
                           if (!besaToSave) return;
 
                           try {
-                            const besaDocRef = doc(db, 'Besas', besaToSave.id);
-                            await updateDoc(besaDocRef, {
-                              officeHours: besaToSave.officeHours,
-                            });
+                            await saveOfficeHoursChanges(besaToSave);
                             setEditingOfficeHours(null); 
                           } catch (error) {
                             console.error('Failed to save office hours:', error);

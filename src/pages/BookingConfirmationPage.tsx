@@ -134,8 +134,8 @@ const BookingConfirmationPage: React.FC = () => {
     if (navigator.share && navigator.canShare(shareData)) {
       try {
         await navigator.share(shareData);
-      } catch (err) {
-        console.log("Error sharing:", err);
+      } catch {
+        // Dismissing the native share dialog needs no follow-up.
       }
     } else {
       const shareText = `Campus Tour Booking Confirmed!\n\nTour: ${bookingData.tourTitle}\nDate: ${formatDate(bookingData.date)}\nTime: ${bookingData.time}\nGroup Size: ${bookingData.groupSize}`;

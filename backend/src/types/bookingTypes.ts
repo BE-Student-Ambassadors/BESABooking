@@ -32,21 +32,16 @@ declare global {
         endDate?: string; // Optional end date
         durationUnit: 'minutes' | 'hours' | 'hour'; // Unit for duration
         maxAttendeesPerBooking: number; // Maximum number of attendees per booking
-        bookingNotice?: string; // Tour-specific message shown before selecting a booking date
-        bannerImageUrl?: string; // Optional banner shown when this tour is selected
         maxBookings: number; // Maximum number of bookings allowed per session
         location: string; // Physical location or 'Online'
-        calendarInviteLocation?: string; // Optional location shown on the calendar invite
         zoomLink: string; // Zoom link if applicable
         autoGenerateZoom: boolean;
-        calendarInviteDetails?: string; // Optional custom details shown on the calendar invite
 
         // Availability
         weeklyHours: WeeklyHours; // Legacy/default weekly recurring hours
         availabilityRanges?: AvailabilityRange[]; // Date ranges with their own recurring hours
         disableAutoAssignBesas?: boolean; // Requires manual BESA assignment when enabled
         allowConcurrentTours?: boolean; // Allows overlaps only with other tours that also enable it
-        googleCalendarId?: string; // Google Calendar destination for bookings from this tour
         // Example: { monday: [{ start: '09:00', end: '17:00' }], tuesday: [...] }  
 
         // Date-Specific Availability
@@ -120,11 +115,6 @@ declare global {
         available: boolean;
         timeSlots: TimeSlot[];
     }
-    type TimeSlot = {
-        id: string;
-        start: string;
-        end: string;
-    };
     
     type OfficeHours = {
         available: boolean;
@@ -132,7 +122,7 @@ declare global {
     };
 
     // Temporary, date-specific schedule changes, stored as arrays on the Besas doc
-    // alongside officeHours. Helpers live in src/functions/besaTempSchedule.ts.
+    // alongside officeHours. Mirrors src/types/global.d.ts; helpers in utils/besaTempSchedule.ts.
 
     // BESA is out on one date (e.g. dentist appointment).
     type TempUnavailability = {
@@ -168,11 +158,6 @@ declare global {
         tempUnavailability?: TempUnavailability[];
     }
 
-    interface BesaAssignment {
-        name: string;
-        email: string;
-    }
-
     interface BookingData {
         bookingId: string; // specific ID for each booking
         tourId?: string; // gets tour name for display purposes
@@ -186,7 +171,7 @@ declare global {
         time?: string;
         attendees: number;
         maxAttendees: number;
-        besas: Array<BesaAssignment | string>;
+        besas: { name: string; email: string }[];
         email?: string;
         firstName?: string;
         lastName?: string;
@@ -223,7 +208,6 @@ declare global {
       tempUnavailability?: TempUnavailability[];
     };
 
-    type UserRole = 'public' | 'admin';
     type DateSpecificSlot = { start: string; end: string };
     type DateSpecificHours = { date: string; unavailable?: boolean; slots: DateSpecificSlot[] };
     

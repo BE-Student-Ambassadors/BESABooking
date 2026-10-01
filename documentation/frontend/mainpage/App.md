@@ -14,6 +14,7 @@ Entry point for the React SPA: wires routes, guards admin pages, fetches tour da
   - Loads tours from Firestore on mount (collection `Tours`) and stores them in local state, ordered by `displayOrder`.
   - Defines `PublicBookingView`, the main booking page.
   - Configures React Router routes.
+  - Admin pages themselves now rely on backend API routes; this document only describes the public-page loading behavior inside `App.tsx`.
 
 ## Data Flow
 
