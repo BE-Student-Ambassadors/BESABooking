@@ -22,6 +22,11 @@ export async function updateOfficeHours(req: Request, res: Response) {
   res.json(updated);
 }
 
+export async function updateTempSchedule(req: Request, res: Response) {
+  const updated = await besasService.updateTempSchedule(getRouteParam(req.params.besaId), req.body);
+  res.json(updated);
+}
+
 export async function deleteBesa(req: Request, res: Response) {
   await besasService.deleteBesa(getRouteParam(req.params.besaId));
   res.status(204).send();

@@ -58,6 +58,24 @@ export const besasRepository = {
     };
   },
 
+  async updateTempSchedule(
+    besaId: string,
+    updates: { tempAdjustments?: TempAdjustment[]; tempUnavailability?: TempUnavailability[] },
+  ) {
+    const besaRef = db.collection("Besas").doc(besaId);
+    const snapshot = await besaRef.get();
+    if (!snapshot.exists) {
+      throw new AppError("BESA not found.", 404);
+    }
+
+    await besaRef.update(updates);
+    const updated = await besaRef.get();
+    return {
+      id: updated.id,
+      ...updated.data(),
+    };
+  },
+
   async delete(besaId: string) {
     const besaRef = db.collection("Besas").doc(besaId);
     const snapshot = await besaRef.get();

@@ -121,6 +121,29 @@ declare global {
         timeSlots: TimeSlot[];
     };
 
+    // Temporary, date-specific schedule changes, stored as arrays on the Besas doc
+    // alongside officeHours. Mirrors src/types/global.d.ts; helpers in utils/besaTempSchedule.ts.
+
+    // BESA is out on one date (e.g. dentist appointment).
+    type TempUnavailability = {
+        id: string;
+        date: string; // YYYY-MM-DD
+        allDay: boolean; // true = unavailable the whole day
+        start?: string; // HH:mm (24hr), only when allDay is false
+        end?: string; // HH:mm (24hr), only when allDay is false
+        reason?: string;
+        createdAt: string; // ISO timestamp
+    };
+
+    // Replacement office hours for one date; overrides that weekday's officeHours.
+    type TempAdjustment = {
+        id: string;
+        date: string; // YYYY-MM-DD
+        timeSlots: TimeSlot[]; // HH:mm (24hr); at least one slot
+        reason?: string;
+        createdAt: string; // ISO timestamp
+    };
+
     interface BesaData {
         id: string;
         name: string;
@@ -131,6 +154,8 @@ declare global {
         officeHours: {
             [day: string]: DayHours;
         };
+        tempAdjustments?: TempAdjustment[];
+        tempUnavailability?: TempUnavailability[];
     }
 
     interface BookingData {
@@ -179,6 +204,8 @@ declare global {
         saturday: OfficeHours;
         sunday: OfficeHours;
       };
+      tempAdjustments?: TempAdjustment[];
+      tempUnavailability?: TempUnavailability[];
     };
 
     type DateSpecificSlot = { start: string; end: string };

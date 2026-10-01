@@ -2,6 +2,7 @@ import { besasRepository } from "../repositories/besas.repository.js";
 import { bookingsRepository } from "../repositories/bookings.repository.js";
 import { toursRepository } from "../repositories/tours.repository.js";
 import { assignmentService } from "./assignment.service.js";
+import { normalizeTempAdjustments, normalizeTempUnavailability } from "../utils/besaTempSchedule.js";
 
 const dayMapping = {
   0: "sunday",
@@ -139,6 +140,9 @@ function normalizeBesa(besa: Record<string, unknown>) {
       ? besa.supportedTourIds.filter((value): value is string => typeof value === "string")
       : [],
     officeHours: normalizeOfficeHours(besa.officeHours),
+    tempAdjustments: normalizeTempAdjustments(besa.tempAdjustments),
+    // `adjustments` was the field name before tempUnavailability existed
+    tempUnavailability: normalizeTempUnavailability(besa.tempUnavailability ?? besa.adjustments),
   };
 }
 

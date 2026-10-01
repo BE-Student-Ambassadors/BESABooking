@@ -1,5 +1,12 @@
 import { db } from "../config/firebaseAdmin.js";
 import { toursRepository } from "../repositories/tours.repository.js";
+import { besasRepository } from "../repositories/besas.repository.js";
+import {
+  getEffectiveDayHours,
+  isBlockedByUnavailability,
+  normalizeTempAdjustments,
+  normalizeTempUnavailability,
+} from "../utils/besaTempSchedule.js";
 import { AppError } from "../utils/errors.js";
 
 type BookingLike = Record<string, unknown> & {
@@ -280,6 +287,67 @@ async function listBookingsForDate(date: string) {
   })) as BookingLike[];
 }
 
+type CoverageBesa = {
+  supportedTourIds: string[];
+  officeHours: Record<string, DayHours>;
+  tempAdjustments: TempAdjustment[];
+  tempUnavailability: TempUnavailability[];
+};
+
+// Same legacy shapes the admin pages handle: { available, timeSlots } or { start, end } per day.
+function normalizeOfficeHoursForCoverage(officeHours: unknown) {
+  const normalized: Record<string, DayHours> = {};
+  if (!officeHours || typeof officeHours !== "object") return normalized;
+
+  Object.entries(officeHours as Record<string, unknown>).forEach(([day, value]) => {
+    const hours = (value ?? {}) as Record<string, unknown>;
+    if (Array.isArray(hours.timeSlots)) {
+      normalized[day] = {
+        available: Boolean(hours.available),
+        timeSlots: hours.timeSlots.flatMap((slot: unknown, index: number) => {
+          const entry = (slot ?? {}) as Record<string, unknown>;
+          return typeof entry.start === "string" && typeof entry.end === "string"
+            ? [{ id: String(index), start: entry.start, end: entry.end }]
+            : [];
+        }),
+      };
+    } else if (typeof hours.start === "string" && typeof hours.end === "string" && hours.start && hours.end) {
+      normalized[day] = { available: true, timeSlots: [{ id: "0", start: hours.start, end: hours.end }] };
+    } else {
+      normalized[day] = { available: false, timeSlots: [] };
+    }
+  });
+
+  return normalized;
+}
+
+async function listCoverageBesas(): Promise<CoverageBesa[]> {
+  const besas = (await besasRepository.listActive()) as Record<string, unknown>[];
+  return besas.map((besa) => ({
+    supportedTourIds: Array.isArray(besa.supportedTourIds)
+      ? besa.supportedTourIds.filter((value): value is string => typeof value === "string")
+      : [],
+    officeHours: normalizeOfficeHoursForCoverage(besa.officeHours),
+    tempAdjustments: normalizeTempAdjustments(besa.tempAdjustments),
+    // `adjustments` was the field name before tempUnavailability existed
+    tempUnavailability: normalizeTempUnavailability(besa.tempUnavailability ?? besa.adjustments),
+  }));
+}
+
+// At least one active BESA who supports the tour has hours on that date (tempAdjustment hours
+// if set, otherwise weekly) covering the whole tour, and isn't marked unavailable during it.
+function hasBesaCoverage(besas: CoverageBesa[], tourId: string, date: string, slotStart: number, slotEnd: number) {
+  return besas.some((besa) => {
+    if (besa.supportedTourIds.length > 0 && !besa.supportedTourIds.includes(tourId)) return false;
+    const dayHours = getEffectiveDayHours(besa, date);
+    if (!dayHours.available) return false;
+    if (isBlockedByUnavailability(besa.tempUnavailability, date, slotStart, slotEnd)) return false;
+    return dayHours.timeSlots.some(
+      (slot) => toMinutes(slot.start) <= slotStart && slotEnd <= toMinutes(slot.end),
+    );
+  });
+}
+
 async function computeAvailabilityForDate(
   tour: Tour,
   date: string,
@@ -299,6 +367,9 @@ async function computeAvailabilityForDate(
 
   const baseSlots = getBaseTimeSlotsForDate(date, tour, tours);
   const bookings = await listBookingsForDate(date);
+  // Tours with auto-assign disabled are staffed manually, so office hours don't limit their slots.
+  const requiresCoverage = tour.disableAutoAssignBesas !== true;
+  const coverageBesas = requiresCoverage ? await listCoverageBesas() : [];
   const toursById = new Map(tours.map((entry) => [entry.tourId, entry]));
   const durationMinutes = getTourDurationMinutes(tour);
   const minimumStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -313,6 +384,7 @@ async function computeAvailabilityForDate(
     const [hour, minute] = parsed.split(":").map(Number);
     slotDateTime.setHours(hour, minute, 0, 0);
     if (slotDateTime < minimumStart) return [];
+    if (requiresCoverage && !hasBesaCoverage(coverageBesas, tour.tourId, date, slotStart, slotEnd)) return [];
 
     let sameTourCount = 0;
     let blockedByOtherTour = false;

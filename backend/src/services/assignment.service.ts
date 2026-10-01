@@ -1,15 +1,11 @@
 import { toursRepository } from "../repositories/tours.repository.js";
 import { besasRepository } from "../repositories/besas.repository.js";
-
-const dayMapping = {
-  0: "sunday",
-  1: "monday",
-  2: "tuesday",
-  3: "wednesday",
-  4: "thursday",
-  5: "friday",
-  6: "saturday",
-} as const;
+import {
+  getEffectiveDayHours,
+  isBlockedByUnavailability,
+  normalizeTempAdjustments,
+  normalizeTempUnavailability,
+} from "../utils/besaTempSchedule.js";
 
 function parseTime12Hour(time12?: string) {
   if (!time12) {
@@ -108,26 +104,45 @@ function normalizeOfficeHours(officeHours: unknown) {
   return normalized;
 }
 
+function toMinutes(time24: string) {
+  const [hours, minutes] = time24.split(":").map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+}
+
 function isBesaAvailable(
-  officeHours: Record<string, { available: boolean; timeSlots: Array<{ start: string; end: string }> }>,
+  besa: Record<string, unknown>,
   bookingDate: string,
   bookingTime: string,
+  bookingEndTime?: string,
 ) {
   if (!bookingDate || !bookingTime) {
     return false;
   }
 
-  const [year, month, day] = bookingDate.split("-").map(Number);
-  const localDate = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 12, 0, 0, 0);
-  const dayKey = dayMapping[localDate.getDay() as keyof typeof dayMapping];
-  const dayHours = officeHours[dayKey];
+  // That date's tempAdjustment hours if any, otherwise the weekly office hours
+  const dayHours = getEffectiveDayHours(
+    {
+      officeHours: normalizeOfficeHours(besa.officeHours) as Record<string, DayHours>,
+      tempAdjustments: normalizeTempAdjustments(besa.tempAdjustments),
+    },
+    bookingDate,
+  );
 
-  if (!dayHours || !dayHours.available || dayHours.timeSlots.length === 0) {
+  if (!dayHours.available || dayHours.timeSlots.length === 0) {
     return false;
   }
 
   const bookingTime24 = parseTime12Hour(bookingTime);
   if (!bookingTime24) {
+    return false;
+  }
+
+  const bookingEnd24 = parseTime12Hour(bookingEndTime);
+  const startMinutes = toMinutes(bookingTime24);
+  const endMinutes = bookingEnd24 ? toMinutes(bookingEnd24) : startMinutes;
+  // `adjustments` was the field name before tempUnavailability existed
+  const unavailability = normalizeTempUnavailability(besa.tempUnavailability ?? besa.adjustments);
+  if (isBlockedByUnavailability(unavailability, bookingDate, startMinutes, endMinutes)) {
     return false;
   }
 
@@ -168,8 +183,12 @@ export const assignmentService = {
           return false;
         }
 
-        const officeHours = normalizeOfficeHours(besa.officeHours);
-        return isBesaAvailable(officeHours, bookingDate, bookingTime);
+        return isBesaAvailable(
+          besa,
+          bookingDate,
+          bookingTime,
+          typeof booking.endTime === "string" ? booking.endTime : undefined,
+        );
       })
       .sort((left, right) => {
         const leftBesa = left as Record<string, unknown>;
