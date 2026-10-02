@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Edit3, Save, Plus, Trash2, ChevronDown, ChevronRight, CalendarX, CalendarClock, History } from 'lucide-react';
+import { Edit3, Save, Plus, Trash2, ChevronDown, ChevronRight, CalendarX, CalendarClock, History, List, CalendarDays } from 'lucide-react';
 import api from '../../../api';
 import {
   generateTempId,
   getDayKeyForDate,
   getLocalDateString,
+  sameSlots,
   sortByDate,
   splitByDate,
 } from '../../../functions/besaTempSchedule.ts';
+import OfficeHoursCalendar from './officeHoursCalendar.tsx';
 
 interface TimeSlot {
   start: string;
@@ -68,6 +70,7 @@ export default function OfficeHoursView() {
   const [tempErrors, setTempErrors] = useState<Record<string, string>>({});
   const [showTempLog, setShowTempLog] = useState<Set<string>>(new Set());
   const [savingTempFor, setSavingTempFor] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
 
   const orderedDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   const dayNames = {
@@ -394,13 +397,57 @@ export default function OfficeHoursView() {
     ))
     .sort((a, b) => a.date.localeCompare(b.date) || a.besaName.localeCompare(b.besaName));
 
+  // Saves hours moved on the calendar view as a one-day tempAdjustment. Reuses that date's
+  // site-made adjustment (same id, so its Google Calendar event is updated rather than
+  // duplicated), and removes it when the hours are back to the usual weekly ones.
+  const saveDayHoursFromCalendar = async (besa: Besa, date: string, timeSlots: TimeSlot[]) => {
+    const existing = besa.tempAdjustments.find(adj => adj.date === date && adj.source !== 'calendar');
+    const others = besa.tempAdjustments.filter(adj => adj !== existing);
+    const usual = besa.officeHours[getDayKeyForDate(date)];
+    const sortedSlots = timeSlots.slice().sort((a, b) => a.start.localeCompare(b.start));
+    const next = usual?.available && sameSlots(usual.timeSlots, sortedSlots)
+      ? others
+      : [
+        ...others,
+        existing
+          ? { ...existing, timeSlots: sortedSlots }
+          : {
+            id: generateTempId(),
+            date,
+            timeSlots: sortedSlots,
+            reason: 'Moved on the office hours calendar',
+            createdAt: new Date().toISOString(),
+          },
+      ];
+    return persistTempField(besa.id, { tempAdjustments: sortByDate(next) });
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Office Hours Management</h1>
-        <p className="text-gray-600">Manage individual BESA office hours and view compiled schedule</p>
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Office Hours Management</h1>
+          <p className="text-gray-600">Manage individual BESA office hours and view compiled schedule</p>
+        </div>
+        <div className="flex bg-gray-100 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}>
+            <List className="h-4 w-4" />
+            List
+          </button>
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium ${viewMode === 'calendar' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}>
+            <CalendarDays className="h-4 w-4" />
+            Calendar
+          </button>
+        </div>
       </div>
 
+      {viewMode === 'calendar' ? (
+        <OfficeHoursCalendar besas={besas} onChangeDayHours={saveDayHoursFromCalendar} />
+      ) : (
       <div className="grid lg:grid-cols-2 gap-8">
         {/* Individual BESA Office Hours */}
         <div className="space-y-4">
@@ -584,6 +631,7 @@ export default function OfficeHoursView() {
                                     <div className="font-medium text-gray-900">{formatTempDate(adj.date)}</div>
                                     <div className="text-amber-700">{formatSlots(adj.timeSlots)}</div>
                                     {adj.reason && <div className="text-xs text-gray-500 mt-0.5">{adj.reason}</div>}
+                                    {adj.source === 'calendar' && <div className="text-xs text-gray-400 mt-0.5">From Google Calendar</div>}
                                   </div>
                                   <button
                                     onClick={() => removeTempAdjustment(besa, adj.id)}
@@ -688,6 +736,7 @@ export default function OfficeHoursView() {
                                     <div className="font-medium text-gray-900">{formatTempDate(entry.date)}</div>
                                     <div className="text-red-600">Unavailable · {formatUnavailabilityWindow(entry)}</div>
                                     {entry.reason && <div className="text-xs text-gray-500 mt-0.5">{entry.reason}</div>}
+                                    {entry.source === 'calendar' && <div className="text-xs text-gray-400 mt-0.5">From Google Calendar</div>}
                                   </div>
                                   <button
                                     onClick={() => removeTempUnavailability(besa, entry.id)}
@@ -870,6 +919,7 @@ export default function OfficeHoursView() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

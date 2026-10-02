@@ -26,3 +26,16 @@ Booking events are synchronized from Firestore by the Firebase Functions project
 
 ## Extending
 - Deploy the Firebase Functions after changing their source or secrets.
+
+## Office Hours: Temporary Changes from the Site
+Temporary office-hour changes made on the booking site (`tempAdjustments` without `source: "calendar"`,
+e.g. hours dragged on the Office Hours calendar view or added with the Adjusted Hours form) are mirrored to
+Google Calendar by the `onBesaWrittenSyncTempAdjustments` Firebase Function (`functions/src/siteAdjustments.ts`).
+
+- Each time slot becomes a `{Name}'s Availability (Temporary)` event with the BESA invited.
+- Events go to `OFFICE_HOURS_WRITE_CALENDAR_ID`, or the first non-`primary` ID in `OFFICE_HOURS_CALENDAR_IDS`.
+- Changing or removing the adjustment on the site updates or deletes the events; past dates are left alone.
+- The events carry a `besaSiteAdjustmentId` extended property, so the calendar-to-site office hours sync
+  (`functions/src/officeHours.ts`) ignores them instead of importing them a second time.
+- Edits made directly to these events in Google Calendar are not read back; change them on the site.
+

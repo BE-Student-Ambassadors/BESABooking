@@ -39,6 +39,9 @@ const readCommonFields = (entry: Record<string, unknown>) => ({
   date: entry.date as string,
   createdAt: typeof entry.createdAt === "string" ? entry.createdAt : "",
   ...(typeof entry.reason === "string" && entry.reason.trim() ? { reason: entry.reason.trim() } : {}),
+  // Set by the Google Calendar sync (Firebase Functions); kept so admin saves don't strip it.
+  ...(entry.source === "calendar" ? { source: "calendar" as const } : {}),
+  ...(typeof entry.calendarEventId === "string" ? { calendarEventId: entry.calendarEventId } : {}),
 });
 
 // Coerce whatever is stored in Firestore into clean entries; malformed ones are dropped.
@@ -78,6 +81,13 @@ export const splitByDate = <T extends TempUnavailability | TempAdjustment>(entri
 
 export const getEntriesForDate = <T extends TempUnavailability | TempAdjustment>(entries: T[] = [], date: string) =>
   sortByDate(entries.filter((entry) => entry.date === date));
+
+// True when two lists cover the same time ranges (ignores ids and order).
+export const sameSlots = (a: Array<{ start: string; end: string }>, b: Array<{ start: string; end: string }>) => {
+  const key = (slots: Array<{ start: string; end: string }>) =>
+    slots.map((slot) => `${slot.start}-${slot.end}`).sort().join(",");
+  return key(a) === key(b);
+};
 
 /**
  * The office hours that apply to a BESA on a specific YYYY-MM-DD date:
