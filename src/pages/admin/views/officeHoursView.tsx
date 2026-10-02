@@ -4,11 +4,13 @@ import api from '../../../api';
 import {
   generateTempId,
   getDayKeyForDate,
+  getEffectiveDayHours,
   getLocalDateString,
   sameSlots,
   sortByDate,
   splitByDate,
 } from '../../../functions/besaTempSchedule.ts';
+import { groupUnavailabilityByName, type UnavailabilityGroup } from '../../../functions/groupUnavailability.ts';
 import OfficeHoursCalendar from './officeHoursCalendar.tsx';
 
 interface TimeSlot {
@@ -33,7 +35,15 @@ interface Besa {
   };
   tempAdjustments: TempAdjustment[];
   tempUnavailability: TempUnavailability[];
+  officeHoursSource?: 'calendar'; // weekly hours come from Google Calendar
 }
+
+type Slot = { start: string; end: string };
+
+type OfficeHoursData = {
+  besas: Besa[];
+  compiledSchedule: Record<string, { timeSlots: { start: string; end: string; besas: string[] }[] }>;
+};
 
 // Form state for a one-day change to office hours (tempAdjustments)
 interface AdjustmentDraft {
@@ -83,21 +93,20 @@ export default function OfficeHoursView() {
     sunday: 'Sunday'
   };
 
-  useEffect(() => {
-    const fetchOfficeHoursData = async () => {
-      try {
-        const response = await api.get<{
-          besas: Besa[];
-          compiledSchedule: Record<string, { timeSlots: { start: string; end: string; besas: string[] }[] }>;
-        }>('/api/admin/office-hours');
-        setBesas(response.data.besas);
-        setCompiledSchedule(response.data.compiledSchedule);
-      } catch (error) {
-        console.error('Error fetching office hours data:', error);
-      }
-    };
+  const loadOfficeHoursData = async (): Promise<Besa[] | null> => {
+    try {
+      const response = await api.get<OfficeHoursData>('/api/admin/office-hours');
+      setBesas(response.data.besas);
+      setCompiledSchedule(response.data.compiledSchedule);
+      return response.data.besas;
+    } catch (error) {
+      console.error('Error fetching office hours data:', error);
+      return null;
+    }
+  };
 
-    void fetchOfficeHoursData();
+  useEffect(() => {
+    void loadOfficeHoursData();
   }, []);
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -214,7 +223,7 @@ export default function OfficeHoursView() {
     ));
   };
 
-  const saveOfficeHoursChanges = async (besa: Besa) => {
+  const saveOfficeHoursChanges = async (besa: Besa): Promise<boolean> => {
     try {
       const response = await api.patch(`/api/besas/${besa.id}/office-hours`, {
         officeHours: besa.officeHours,
@@ -231,9 +240,11 @@ export default function OfficeHoursView() {
         compiledSchedule: Record<string, { timeSlots: { start: string; end: string; besas: string[] }[] }>;
       }>('/api/admin/office-hours');
       setCompiledSchedule(refreshed.data.compiledSchedule);
+      return true;
     } catch (error) {
       console.error('Failed to save office hours:', error);
       alert('Failed to save changes. Please try again.');
+      return false;
     }
   };
 
@@ -273,6 +284,15 @@ export default function OfficeHoursView() {
     setTempErrors(prev => ({ ...prev, [`${besaId}:unavailability`]: '' }));
   };
 
+  // Why a save failed, in words an admin can act on
+  const describeSaveError = (err: unknown) => {
+    const response = (err as { response?: { status?: number; data?: { message?: string } } }).response;
+    if (!response || (response.status === 500 && !response.data?.message)) {
+      return "Couldn't reach the server. If you're running the site locally, make sure the backend is running (cd backend && npm run dev).";
+    }
+    return response.data?.message || `The server returned an error (${response.status}). Please try again.`;
+  };
+
   const persistTempField = async (
     besaId: string,
     updates: Partial<Pick<Besa, 'tempAdjustments' | 'tempUnavailability'>>
@@ -284,7 +304,7 @@ export default function OfficeHoursView() {
       return true;
     } catch (err) {
       console.error('Failed to save temporary schedule change:', err);
-      alert('Failed to save. Please try again.');
+      alert(`Failed to save. ${describeSaveError(err)}`);
       return false;
     } finally {
       setSavingTempFor(null);
@@ -348,9 +368,17 @@ export default function OfficeHoursView() {
     await persistTempField(besa.id, { tempAdjustments: besa.tempAdjustments.filter(adj => adj.id !== id) });
   };
 
-  const removeTempUnavailability = async (besa: Besa, id: string) => {
-    if (!confirm('Remove this unavailability?')) return;
-    await persistTempField(besa.id, { tempUnavailability: besa.tempUnavailability.filter(entry => entry.id !== id) });
+  const removeTempUnavailabilityGroup = async (besa: Besa, group: UnavailabilityGroup) => {
+    const count = group.entries.length;
+    const message = count === 1
+      ? 'Remove this unavailability?'
+      : `Remove all ${count} "${group.reason}" dates?`;
+    const calendarNote = group.fromCalendar
+      ? '\n\nThese came from Google Calendar, so the next calendar sync will add them back unless they are removed there too.'
+      : '';
+    if (!confirm(message + calendarNote)) return;
+    const ids = new Set(group.entries.map(entry => entry.id));
+    await persistTempField(besa.id, { tempUnavailability: besa.tempUnavailability.filter(entry => !ids.has(entry.id)) });
   };
 
   const toggleTempLog = (besaId: string) => {
@@ -373,21 +401,48 @@ export default function OfficeHoursView() {
   const formatUnavailabilityWindow = (entry: TempUnavailability) =>
     entry.allDay ? 'All day' : `${formatTime12Hour(entry.start || '')} - ${formatTime12Hour(entry.end || '')}`;
 
-  // Single list of both kinds, for the log and the all-BESA overview
-  type TempChangeRow = { key: string; date: string; kind: 'adjustment' | 'unavailability'; label: string; reason?: string; besaName: string };
-  const toTempRows = (besa: Besa, adjustments: TempAdjustment[], unavailability: TempUnavailability[]): TempChangeRow[] => [
+  const formatShortDate = (date: string) => {
+    const [y, m, d] = date.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // "Mon, Wed · 1:00 PM - 2:30 PM" for a group of repeated unavailability
+  const describeGroupWindow = (group: UnavailabilityGroup) => {
+    const window = group.windows.length === 1 ? formatUnavailabilityWindow(group.windows[0]) : 'Various times';
+    return group.entries.length > 1 ? `${group.weekdays.join(', ')} · ${window}` : window;
+  };
+
+  const describeGroupDates = (group: UnavailabilityGroup) =>
+    group.entries.length === 1
+      ? formatTempDate(group.firstDate)
+      : `${formatShortDate(group.firstDate)} – ${formatTempDate(group.lastDate)} · ${group.entries.length} dates`;
+
+  // Single list of both kinds, for the log and the all-BESA overview. Repeated unavailability
+  // with the same name is one row. `date` is for sorting (first date upcoming, last date past).
+  type TempChangeRow = { key: string; date: string; dateLabel: string; kind: 'adjustment' | 'unavailability'; label: string; reason?: string; besaName: string };
+  const toTempRows = (
+    besa: Besa,
+    adjustments: TempAdjustment[],
+    unavailability: TempUnavailability[],
+    sortBy: 'first' | 'last' = 'first'
+  ): TempChangeRow[] => [
     ...adjustments.map(adj => ({
-      key: `${besa.id}-a-${adj.id}`, date: adj.date, kind: 'adjustment' as const,
-      label: `Hours: ${formatSlots(adj.timeSlots)}`, reason: adj.reason, besaName: besa.name,
+      key: `${besa.id}-a-${adj.id}`, date: adj.date, dateLabel: formatTempDate(adj.date), kind: 'adjustment' as const,
+      label: adj.timeSlots.length ? `Hours: ${formatSlots(adj.timeSlots)}` : 'No office hours', reason: adj.reason, besaName: besa.name,
     })),
-    ...unavailability.map(entry => ({
-      key: `${besa.id}-u-${entry.id}`, date: entry.date, kind: 'unavailability' as const,
-      label: `Out: ${formatUnavailabilityWindow(entry)}`, reason: entry.reason, besaName: besa.name,
+    ...groupUnavailabilityByName(unavailability).map(group => ({
+      key: `${besa.id}-u-${group.key}`,
+      date: sortBy === 'first' ? group.firstDate : group.lastDate,
+      dateLabel: describeGroupDates(group),
+      kind: 'unavailability' as const,
+      label: `Out: ${describeGroupWindow(group)}`, reason: group.reason, besaName: besa.name,
     })),
   ];
 
+  // Repeated unavailability with the same name counts once
   const getUpcomingCount = (besa: Besa) =>
-    splitByDate(besa.tempAdjustments, today).upcoming.length + splitByDate(besa.tempUnavailability, today).upcoming.length;
+    splitByDate(besa.tempAdjustments, today).upcoming.length +
+    groupUnavailabilityByName(splitByDate(besa.tempUnavailability, today).upcoming).length;
 
   const upcomingTempChangesAll = besas
     .flatMap(besa => toTempRows(
@@ -397,29 +452,162 @@ export default function OfficeHoursView() {
     ))
     .sort((a, b) => a.date.localeCompare(b.date) || a.besaName.localeCompare(b.besaName));
 
-  // Saves hours moved on the calendar view as a one-day tempAdjustment. Reuses that date's
-  // site-made adjustment (same id, so its Google Calendar event is updated rather than
-  // duplicated), and removes it when the hours are back to the usual weekly ones.
-  const saveDayHoursFromCalendar = async (besa: Besa, date: string, timeSlots: TimeSlot[]) => {
+  const sameSlot = (a: Slot, b: Slot) => a.start === b.start && a.end === b.end;
+  const sortSlots = <S extends Slot>(slots: S[]) => slots.slice().sort((a, b) => a.start.localeCompare(b.start));
+
+  // Saves one date's hours from the calendar view as that date's site-made tempAdjustment.
+  // `timeSlots` is the day's full hours; `temporarySlots` says which of them are temporary
+  // (the rest stay the BESA's usual events on Google Calendar). Reuses the existing adjustment
+  // (same id, so its Google Calendar changes are updated, not redone). With `revertIfUsual`,
+  // hours that match the usual weekly ones remove the adjustment, restoring that day.
+  const saveDayAdjustment = async (
+    besa: Besa,
+    date: string,
+    timeSlots: Slot[],
+    temporarySlots: Slot[],
+    revertIfUsual = false
+  ) => {
     const existing = besa.tempAdjustments.find(adj => adj.date === date && adj.source !== 'calendar');
     const others = besa.tempAdjustments.filter(adj => adj !== existing);
     const usual = besa.officeHours[getDayKeyForDate(date)];
-    const sortedSlots = timeSlots.slice().sort((a, b) => a.start.localeCompare(b.start));
-    const next = usual?.available && sameSlots(usual.timeSlots, sortedSlots)
+    const usualSlots = usual?.available ? usual.timeSlots : [];
+    const sorted = sortSlots(timeSlots);
+    const temporary = sortSlots(temporarySlots.filter(slot => sorted.some(entry => sameSlot(entry, slot))));
+    const next = revertIfUsual && sameSlots(usualSlots, sorted)
       ? others
       : [
         ...others,
-        existing
-          ? { ...existing, timeSlots: sortedSlots }
-          : {
+        {
+          ...(existing || {
             id: generateTempId(),
             date,
-            timeSlots: sortedSlots,
-            reason: 'Moved on the office hours calendar',
+            reason: 'Changed on the office hours calendar',
             createdAt: new Date().toISOString(),
-          },
+          }),
+          timeSlots: sorted.map((slot, index) => ({ id: String(index), start: slot.start, end: slot.end })),
+          temporarySlots: temporary.map(({ start, end }) => ({ start, end })),
+        },
       ];
     return persistTempField(besa.id, { tempAdjustments: sortByDate(next) });
+  };
+
+  type WeeklyChange =
+    | { action: 'change'; date: string; from: Slot; to: Slot }
+    | { action: 'remove'; date: string; from: Slot }
+    | { action: 'add'; date: string; to: Slot }
+    | { action: 'removeAll'; date: string };
+
+  // Permanent change to one weekly slot on that weekday, from `date` on. When the BESA's weekly
+  // hours come from Google Calendar, the Firebase Function edits their "{Name}'s Availability"
+  // recurring events and re-syncs; the site waits for it to finish. Otherwise only the site's
+  // weekly hours change (and, having no dates, apply to every week). Resolves to the BESA as
+  // it is afterwards, or null if it failed.
+  const saveWeeklyChange = async (besa: Besa, change: WeeklyChange): Promise<Besa | null> => {
+    if (besa.officeHoursSource !== 'calendar') {
+      const day = getDayKeyForDate(change.date);
+      const dayHours = besa.officeHours[day] || { available: false, timeSlots: [] };
+      const timeSlots = change.action === 'add'
+        ? [...dayHours.timeSlots, { id: generateTempId(), ...change.to }]
+        : change.action === 'remove'
+          ? dayHours.timeSlots.filter(slot => !sameSlot(slot, change.from))
+          : change.action === 'change'
+            ? dayHours.timeSlots.map(slot => (sameSlot(slot, change.from) ? { ...slot, ...change.to } : slot))
+            : [];
+      const officeHours = change.action === 'removeAll'
+        ? Object.fromEntries(orderedDays.map(entry => [entry, { available: false, timeSlots: [] }]))
+        : {
+          ...besa.officeHours,
+          [day]: { available: timeSlots.length > 0, timeSlots: sortSlots(timeSlots) },
+        };
+      // Merge into the latest state; `besa` may be from before an earlier save in the same action
+      setBesas(prev => prev.map(entry => (entry.id === besa.id ? { ...entry, officeHours } : entry)));
+      const saved = await saveOfficeHoursChanges({ ...besa, officeHours });
+      return saved ? { ...besa, officeHours } : null;
+    }
+
+    try {
+      const { data: request } = await api.post<{ id: string }>(
+        `/api/besas/${besa.id}/office-hours/permanent-change`,
+        change
+      );
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        const { data: status } = await api.get<{ status: string; error?: string }>(
+          `/api/besas/office-hours-requests/${request.id}`
+        );
+        if (status.status === 'done') {
+          const fresh = await loadOfficeHoursData();
+          return fresh?.find(entry => entry.id === besa.id) || besa;
+        }
+        if (status.status === 'failed') {
+          alert(`Couldn't change ${besa.name}'s hours on Google Calendar:\n\n${status.error || 'Unknown error'}`);
+          return null;
+        }
+      }
+      alert('Google Calendar is still updating. Refresh the page in a minute to see the new hours.');
+      return besa;
+    } catch (error) {
+      console.error('Failed to request permanent office-hours change:', error);
+      alert('Failed to save. Please try again.');
+      return null;
+    }
+  };
+
+  // Right-click "Change to permanent hours": `slot` on that date becomes weekly from then on.
+  // If that day replaced some of the usual hours, the first one is changed to `slot` (and any
+  // others removed); otherwise `slot` is added. That date's one-day change then shrinks to
+  // what's still temporary, or goes away if the day now matches the weekly hours.
+  const makeSlotPermanent = async (besa: Besa, date: string, slot: Slot) => {
+    const day = getDayKeyForDate(date);
+    const usualSlots = besa.officeHours[day]?.available ? besa.officeHours[day].timeSlots : [];
+    const hours = getEffectiveDayHours(besa, date);
+    const dayShifts = hours.available ? hours.timeSlots : [];
+    const replaced = usualSlots.filter(usual => !dayShifts.some(shift => sameSlot(shift, usual)));
+
+    let updated: Besa | null = replaced.length === 0
+      ? await saveWeeklyChange(besa, { action: 'add', date, to: slot })
+      : await saveWeeklyChange(besa, { action: 'change', date, from: replaced[0], to: slot });
+    for (const extra of replaced.slice(1)) {
+      if (!updated) break;
+      updated = await saveWeeklyChange(updated, { action: 'remove', date, from: extra });
+    }
+    if (!updated) return false;
+
+    const adjustment = updated.tempAdjustments.find(adj => adj.date === date && adj.source !== 'calendar');
+    if (!adjustment) return true;
+    const temporary = (adjustment.temporarySlots ?? adjustment.timeSlots).filter(entry => !sameSlot(entry, slot));
+    return saveDayAdjustment(updated, date, adjustment.timeSlots, temporary, true);
+  };
+
+  // Right-click "Remove office hours": `slot` that date only, that weekday from then on, or
+  // every weekly slot from then on.
+  const removeHoursFromCalendar = async (besa: Besa, date: string, slot: Slot, scope: 'day' | 'weekday' | 'all') => {
+    if (scope === 'all') return (await saveWeeklyChange(besa, { action: 'removeAll', date })) !== null;
+
+    if (scope === 'day') {
+      const hours = getEffectiveDayHours(besa, date);
+      const adjustment = besa.tempAdjustments.find(adj => adj.date === date && adj.source !== 'calendar');
+      const temporary = adjustment ? adjustment.temporarySlots ?? adjustment.timeSlots : [];
+      return saveDayAdjustment(
+        besa, date,
+        (hours.available ? hours.timeSlots : []).filter(entry => !sameSlot(entry, slot)),
+        temporary.filter(entry => !sameSlot(entry, slot)),
+        true
+      );
+    }
+
+    const updated = await saveWeeklyChange(besa, { action: 'remove', date, from: slot });
+    if (!updated) return false;
+    // A one-day change on that date that kept the slot shouldn't keep it now
+    const adjustment = updated.tempAdjustments.find(adj => adj.date === date && adj.source !== 'calendar');
+    if (!adjustment || !adjustment.timeSlots.some(entry => sameSlot(entry, slot))) return true;
+    return saveDayAdjustment(
+      updated, date,
+      adjustment.timeSlots.filter(entry => !sameSlot(entry, slot)),
+      (adjustment.temporarySlots ?? adjustment.timeSlots).filter(entry => !sameSlot(entry, slot)),
+      true
+    );
   };
 
   return (
@@ -446,7 +634,13 @@ export default function OfficeHoursView() {
       </div>
 
       {viewMode === 'calendar' ? (
-        <OfficeHoursCalendar besas={besas} onChangeDayHours={saveDayHoursFromCalendar} />
+        <OfficeHoursCalendar
+          besas={besas}
+          onSetDayHours={saveDayAdjustment}
+          onWeeklyChange={async (besa, change) => (await saveWeeklyChange(besa, change)) !== null}
+          onMakePermanent={makeSlotPermanent}
+          onRemoveHours={removeHoursFromCalendar}
+        />
       ) : (
       <div className="grid lg:grid-cols-2 gap-8">
         {/* Individual BESA Office Hours */}
@@ -597,7 +791,7 @@ export default function OfficeHoursView() {
                     const unavailabilityDraft = getUnavailabilityDraft(besa.id);
                     const adjustments = splitByDate(besa.tempAdjustments, today);
                     const unavailability = splitByDate(besa.tempUnavailability, today);
-                    const pastRows = toTempRows(besa, adjustments.past, unavailability.past)
+                    const pastRows = toTempRows(besa, adjustments.past, unavailability.past, 'last')
                       .sort((a, b) => b.date.localeCompare(a.date));
                     const isSaving = savingTempFor === besa.id;
                     const logOpen = showTempLog.has(besa.id);
@@ -629,7 +823,7 @@ export default function OfficeHoursView() {
                                 <div key={adj.id} className="flex items-start justify-between gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                                   <div className="text-sm">
                                     <div className="font-medium text-gray-900">{formatTempDate(adj.date)}</div>
-                                    <div className="text-amber-700">{formatSlots(adj.timeSlots)}</div>
+                                    <div className="text-amber-700">{adj.timeSlots.length ? formatSlots(adj.timeSlots) : 'No office hours this day'}</div>
                                     {adj.reason && <div className="text-xs text-gray-500 mt-0.5">{adj.reason}</div>}
                                     {adj.source === 'calendar' && <div className="text-xs text-gray-400 mt-0.5">From Google Calendar</div>}
                                   </div>
@@ -730,18 +924,39 @@ export default function OfficeHoursView() {
 
                           {unavailability.upcoming.length > 0 ? (
                             <div className="space-y-2 mb-3">
-                              {unavailability.upcoming.map(entry => (
-                                <div key={entry.id} className="flex items-start justify-between gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                                  <div className="text-sm">
-                                    <div className="font-medium text-gray-900">{formatTempDate(entry.date)}</div>
-                                    <div className="text-red-600">Unavailable · {formatUnavailabilityWindow(entry)}</div>
-                                    {entry.reason && <div className="text-xs text-gray-500 mt-0.5">{entry.reason}</div>}
-                                    {entry.source === 'calendar' && <div className="text-xs text-gray-400 mt-0.5">From Google Calendar</div>}
+                              {groupUnavailabilityByName(unavailability.upcoming).map(group => (
+                                <div key={group.key} className="flex items-start justify-between gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                                  <div className="text-sm min-w-0">
+                                    {group.entries.length > 1 && group.reason && (
+                                      <div className="font-medium text-gray-900">{group.reason}</div>
+                                    )}
+                                    <div className={group.entries.length > 1 ? 'text-gray-700' : 'font-medium text-gray-900'}>
+                                      {describeGroupDates(group)}
+                                    </div>
+                                    <div className="text-red-600">Unavailable · {describeGroupWindow(group)}</div>
+                                    {group.entries.length === 1 && group.reason && (
+                                      <div className="text-xs text-gray-500 mt-0.5">{group.reason}</div>
+                                    )}
+                                    {group.fromCalendar && <div className="text-xs text-gray-400 mt-0.5">From Google Calendar</div>}
+                                    {group.entries.length > 1 && (
+                                      <details className="mt-1">
+                                        <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Show dates</summary>
+                                        <ul className="mt-1 space-y-0.5 text-xs text-gray-600">
+                                          {group.entries.map(entry => (
+                                            <li key={entry.id}>
+                                              {formatTempDate(entry.date)}
+                                              {group.windows.length > 1 && <span className="text-gray-400"> · {formatUnavailabilityWindow(entry)}</span>}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </details>
+                                    )}
                                   </div>
                                   <button
-                                    onClick={() => removeTempUnavailability(besa, entry.id)}
+                                    onClick={() => removeTempUnavailabilityGroup(besa, group)}
                                     disabled={isSaving}
-                                    aria-label="Remove unavailability"
+                                    aria-label={group.entries.length > 1 ? 'Remove all of these dates' : 'Remove unavailability'}
+                                    title={group.entries.length > 1 ? `Remove all ${group.entries.length} dates` : undefined}
                                     className="p-1 text-red-500 hover:bg-red-100 rounded disabled:opacity-50">
                                     <Trash2 className="h-3 w-3" />
                                   </button>
@@ -818,7 +1033,7 @@ export default function OfficeHoursView() {
                               <div className="space-y-1">
                                 {pastRows.map(row => (
                                   <div key={row.key} className="text-xs text-gray-500 flex flex-wrap gap-x-2">
-                                    <span className="font-medium text-gray-600">{formatTempDate(row.date)}</span>
+                                    <span className="font-medium text-gray-600">{row.dateLabel}</span>
                                     <span className={row.kind === 'adjustment' ? 'text-amber-700' : 'text-red-600'}>{row.label}</span>
                                     {row.reason && <span>· {row.reason}</span>}
                                   </div>
@@ -886,7 +1101,7 @@ export default function OfficeHoursView() {
               <div className="space-y-2">
                 {upcomingTempChangesAll.map(row => (
                   <div key={row.key} className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-medium text-gray-900">{formatTempDate(row.date)}</span>
+                    <span className="font-medium text-gray-900">{row.dateLabel}</span>
                     <span className="text-xs text-gray-400">•</span>
                     <span className="font-medium text-gray-900">{row.besaName}</span>
                     <span className={row.kind === 'adjustment' ? 'text-amber-700' : 'text-red-600'}>{row.label}</span>

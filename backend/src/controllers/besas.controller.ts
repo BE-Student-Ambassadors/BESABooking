@@ -27,6 +27,16 @@ export async function updateTempSchedule(req: Request, res: Response) {
   res.json(updated);
 }
 
+export async function requestPermanentChange(req: Request, res: Response) {
+  const created = await besasService.requestPermanentChange(getRouteParam(req.params.besaId), req.body);
+  res.status(202).json(created);
+}
+
+export async function getPermanentChangeRequest(req: Request, res: Response) {
+  const request = await besasService.getPermanentChangeRequest(getRouteParam(req.params.requestId));
+  res.json(request);
+}
+
 export async function deleteBesa(req: Request, res: Response) {
   await besasService.deleteBesa(getRouteParam(req.params.besaId));
   res.status(204).send();

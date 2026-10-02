@@ -53,15 +53,24 @@ export const normalizeTempUnavailability = (raw: unknown): TempUnavailability[] 
     return { ...readCommonFields(entry), allDay, ...(allDay ? {} : { start, end }) };
   });
 
+const readSlots = (raw: unknown) =>
+  (Array.isArray(raw) ? raw : []).flatMap((slot: unknown) => {
+    const s = (slot || {}) as Record<string, unknown>;
+    if (typeof s.start !== "string" || typeof s.end !== "string" || !HHMM.test(s.start) || !HHMM.test(s.end)) return [];
+    return [{ id: typeof s.id === "string" ? s.id : generateTempId(), start: s.start, end: s.end }];
+  }).sort((a, b) => a.start.localeCompare(b.start));
+
+// An adjustment with no time slots means no office hours that day (only site-made ones;
+// the calendar sync never writes those). Malformed entries are dropped.
 export const normalizeTempAdjustments = (raw: unknown): TempAdjustment[] =>
   readEntries(raw).flatMap((entry) => {
-    const timeSlots = (Array.isArray(entry.timeSlots) ? entry.timeSlots : []).flatMap((slot: unknown) => {
-      const s = (slot || {}) as Record<string, unknown>;
-      if (typeof s.start !== "string" || typeof s.end !== "string" || !HHMM.test(s.start) || !HHMM.test(s.end)) return [];
-      return [{ id: typeof s.id === "string" ? s.id : generateTempId(), start: s.start, end: s.end }];
-    });
-    if (timeSlots.length === 0) return [];
-    return [{ ...readCommonFields(entry), timeSlots: timeSlots.sort((a, b) => a.start.localeCompare(b.start)) }];
+    const timeSlots = readSlots(entry.timeSlots);
+    if (timeSlots.length === 0 && entry.source === "calendar") return [];
+    if (timeSlots.length === 0 && !Array.isArray(entry.timeSlots)) return [];
+    const temporarySlots = Array.isArray(entry.temporarySlots)
+      ? { temporarySlots: readSlots(entry.temporarySlots).map(({ start, end }) => ({ start, end })) }
+      : {};
+    return [{ ...readCommonFields(entry), timeSlots, ...temporarySlots }];
   });
 
 const sortKey = (entry: TempUnavailability | TempAdjustment) =>
@@ -91,20 +100,23 @@ export const sameSlots = (a: Array<{ start: string; end: string }>, b: Array<{ s
 
 /**
  * The office hours that apply to a BESA on a specific YYYY-MM-DD date:
- * a tempAdjustment for that date if one exists, otherwise the recurring weekday hours.
+ * a tempAdjustment for that date if one exists (a site-made one wins over calendar-made ones),
+ * otherwise the recurring weekday hours.
  * (tempUnavailability is not applied here; check it with isBlockedByUnavailability.)
  */
 export const getEffectiveDayHours = (
   besa: { officeHours?: Record<string, DayHours>; tempAdjustments?: TempAdjustment[] },
   date: string
 ): DayHours & { adjusted: boolean } => {
-  const adjustments = getEntriesForDate(besa.tempAdjustments, date);
+  // A site-made change decides that day on its own; calendar-made ones only apply without one
+  const forDate = getEntriesForDate(besa.tempAdjustments, date);
+  const siteMade = forDate.filter((adj) => adj.source !== "calendar");
+  const adjustments = siteMade.length > 0 ? siteMade : forDate;
   if (adjustments.length > 0) {
-    return {
-      available: true,
-      timeSlots: adjustments.flatMap((adj) => adj.timeSlots).sort((a, b) => a.start.localeCompare(b.start)),
-      adjusted: true,
-    };
+    // The same slot can come from both a site-made and a calendar-made adjustment
+    const unique = new Map(adjustments.flatMap((adj) => adj.timeSlots).map((slot) => [`${slot.start}-${slot.end}`, slot]));
+    const timeSlots = [...unique.values()].sort((a, b) => a.start.localeCompare(b.start));
+    return { available: timeSlots.length > 0, timeSlots, adjusted: true };
   }
   const weekly = besa.officeHours?.[getDayKeyForDate(date)];
   return { available: !!weekly?.available, timeSlots: weekly?.timeSlots || [], adjusted: false };

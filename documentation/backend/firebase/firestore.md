@@ -55,6 +55,12 @@ Core collections:
     `src/functions/besaTempSchedule.ts` (keep them in sync). Tours with `disableAutoAssignBesas` skip the coverage check.
   - Legacy: an `adjustments` field (earlier name for `tempUnavailability`) is read if `tempUnavailability` is missing.
 
+## OfficeHoursChangeRequests (`OfficeHoursChangeRequests` collection)
+- Created by the backend when an admin makes a permanent office-hours change on the calendar view.
+- **Fields**: `besaId`, `email`, `name`, `date` (first date with the new hours), `from`/`to` (`{ start, end }`
+  HH:mm), `status` (`pending` | `done` | `failed`), `error?`, `createdAt`, `completedAt?`, plus the calendar
+  and event ids the Firebase Function changed.
+
 ## Auth
 - Firebase Authentication protects admin routes (email/password + Google provider). No separate `users` collection is stored.
 

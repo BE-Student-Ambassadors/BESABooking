@@ -151,7 +151,10 @@ declare global {
     type TempAdjustment = {
         id: string;
         date: string; // YYYY-MM-DD
-        timeSlots: TimeSlot[]; // HH:mm (24hr); at least one slot
+        timeSlots: TimeSlot[]; // HH:mm (24hr); the day's full hours. Empty = no hours that day (site-made only)
+        // Site-made: which of timeSlots are the temporary ones. The rest are the BESA's usual events
+        // that day, left as they are on Google Calendar. Missing = all of timeSlots.
+        temporarySlots?: Array<{ start: string; end: string }>;
         reason?: string;
         source?: "calendar"; // written by the Google Calendar sync; absent for admin-added entries
         calendarEventId?: string;

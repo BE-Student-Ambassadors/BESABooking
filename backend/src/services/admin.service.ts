@@ -140,6 +140,8 @@ function normalizeBesa(besa: Record<string, unknown>) {
       ? besa.supportedTourIds.filter((value): value is string => typeof value === "string")
       : [],
     officeHours: normalizeOfficeHours(besa.officeHours),
+    // "calendar" when the weekly hours come from Google Calendar (set by the Firebase sync)
+    ...(besa.officeHoursSource === "calendar" ? { officeHoursSource: "calendar" as const } : {}),
     tempAdjustments: normalizeTempAdjustments(besa.tempAdjustments),
     // `adjustments` was the field name before tempUnavailability existed
     tempUnavailability: normalizeTempUnavailability(besa.tempUnavailability ?? besa.adjustments),
