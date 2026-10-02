@@ -132,6 +132,8 @@ declare global {
         start?: string; // HH:mm (24hr), only when allDay is false
         end?: string; // HH:mm (24hr), only when allDay is false
         reason?: string;
+        source?: "calendar"; // written by the Google Calendar sync; absent for admin-added entries
+        calendarEventId?: string;
         createdAt: string; // ISO timestamp
     };
 
@@ -141,6 +143,8 @@ declare global {
         date: string; // YYYY-MM-DD
         timeSlots: TimeSlot[]; // HH:mm (24hr); at least one slot
         reason?: string;
+        source?: "calendar"; // written by the Google Calendar sync; absent for admin-added entries
+        calendarEventId?: string;
         createdAt: string; // ISO timestamp
     };
 
