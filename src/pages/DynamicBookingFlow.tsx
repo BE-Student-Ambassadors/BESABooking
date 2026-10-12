@@ -558,6 +558,9 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   )?.title || bookingData.tourType || "Book a Tour";
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // What's typed in the group size box while editing (null = show bookingData.maxAttendees),
+  // so it can be cleared and retyped without snapping back to 1.
+  const [groupSizeInput, setGroupSizeInput] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [besas, setBesas] = useState<BesaData[]>([]);
   const [calendarRange, setCalendarRange] = useState<{ start: string; end: string } | null>(null);
@@ -1762,19 +1765,17 @@ const renderSection2 = () => {
 
   const availableTimes = getAvailableTimesForDate(bookingData.date, selected);
 
-  const updateGroupSize = (newSize: number) => {
-    const maxSize = selected.maxAttendeesPerBooking || 15;
-    const finalSize = Math.min(Math.max(1, newSize), maxSize);
-    updateBookingData("maxAttendees", finalSize);
-  };
-
   const handleGroupSizeInput = (value: string) => {
     const parsed = parseInt(value, 10);
     if (Number.isNaN(parsed)) {
-      updateBookingData("maxAttendees", 1);
+      // Let the box be empty while typing; the last valid size is kept
+      setGroupSizeInput(value);
       return;
     }
-    updateGroupSize(parsed);
+    const maxSize = selected.maxAttendeesPerBooking || 15;
+    const finalSize = Math.min(Math.max(1, parsed), maxSize);
+    setGroupSizeInput(finalSize === parsed ? value : String(finalSize));
+    updateBookingData("maxAttendees", finalSize);
   };
 
   return (
@@ -1831,8 +1832,9 @@ const renderSection2 = () => {
             type="number"
             min={1}
             max={selected.maxAttendeesPerBooking || 15}
-            value={bookingData.maxAttendees}
+            value={groupSizeInput ?? bookingData.maxAttendees}
             onChange={(e) => handleGroupSizeInput(e.target.value)}
+            onBlur={() => setGroupSizeInput(null)}
             className="w-full sm:w-48 px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg text-center"
             inputMode="numeric"
           />
