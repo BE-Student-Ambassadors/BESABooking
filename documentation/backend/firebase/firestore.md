@@ -61,6 +61,13 @@ Core collections:
   HH:mm), `status` (`pending` | `done` | `failed`), `error?`, `createdAt`, `completedAt?`, plus the calendar
   and event ids the Firebase Function changed.
 
+## Settings (`Settings` collection)
+- `officeHoursCalendars`: `{ calendarIds: string[], updatedAt }`, the Google Calendars the office-hours sync
+  reads. Edited from the "Connected Google Calendars" panel on the admin Office Hours page
+  (`GET`/`PUT /api/admin/office-hours/calendars`). A write triggers the `onOfficeHoursCalendarsChanged`
+  Firebase Function, which opens/closes watch channels and re-syncs. Until the doc exists, the backend and
+  functions fall back to their `OFFICE_HOURS_CALENDAR_IDS` env values.
+
 ## Auth
 - Firebase Authentication protects admin routes (email/password + Google provider). No separate `users` collection is stored.
 
