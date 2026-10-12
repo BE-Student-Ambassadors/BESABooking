@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { adminService } from "../services/admin.service.js";
 import { settingsService } from "../services/settings.service.js";
+import { calendarSettingsService } from "../services/calendarSettings.service.js";
 import { getRouteParam } from "../utils/request.js";
 
 export async function getDashboardData(_req: Request, res: Response) {
@@ -20,6 +21,16 @@ export async function getBesaManagementData(_req: Request, res: Response) {
 
 export async function getOfficeHoursData(_req: Request, res: Response) {
   const data = await adminService.getOfficeHoursData();
+  res.json(data);
+}
+
+export async function getOfficeHoursCalendars(_req: Request, res: Response) {
+  const data = await calendarSettingsService.getOfficeHoursCalendars();
+  res.json(data);
+}
+
+export async function updateOfficeHoursCalendars(req: Request, res: Response) {
+  const data = await calendarSettingsService.updateOfficeHoursCalendars(req.body);
   res.json(data);
 }
 

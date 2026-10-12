@@ -12,6 +12,7 @@ import {
 } from '../../../functions/besaTempSchedule.ts';
 import { groupUnavailabilityByName, type UnavailabilityGroup } from '../../../functions/groupUnavailability.ts';
 import OfficeHoursCalendar from './officeHoursCalendar.tsx';
+import OfficeHoursCalendarSources from './officeHoursCalendarSources.tsx';
 
 interface TimeSlot {
   start: string;
@@ -632,6 +633,8 @@ export default function OfficeHoursView() {
           </button>
         </div>
       </div>
+
+      <OfficeHoursCalendarSources onChanged={() => void loadOfficeHoursData()} />
 
       {viewMode === 'calendar' ? (
         <OfficeHoursCalendar
