@@ -44,17 +44,6 @@ function normalizeDateKey(dateStr: unknown) {
   return `${year.padStart(4, "0")}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
-function rolePriority(role?: string) {
-  const normalized = (role ?? "").toLowerCase();
-  if (normalized === "besa") {
-    return 0;
-  }
-  if (normalized === "besas on-call" || normalized === "besa on-call") {
-    return 1;
-  }
-  return 2;
-}
-
 function normalizeOfficeHours(officeHours: unknown) {
   const normalized: Record<string, { available: boolean; timeSlots: Array<{ start: string; end: string }> }> = {};
 
@@ -199,18 +188,7 @@ export const assignmentService = {
           typeof booking.endTime === "string" ? booking.endTime : undefined,
         );
       })
-      .sort((left, right) => {
-        const leftBesa = left as Record<string, unknown>;
-        const rightBesa = right as Record<string, unknown>;
-        const priorityDiff = rolePriority(typeof leftBesa.role === "string" ? leftBesa.role : undefined)
-          - rolePriority(typeof rightBesa.role === "string" ? rightBesa.role : undefined);
-
-        if (priorityDiff !== 0) {
-          return priorityDiff;
-        }
-
-        return randomTiebreakFor(left) - randomTiebreakFor(right);
-      })
+      .sort((left, right) => randomTiebreakFor(left) - randomTiebreakFor(right))
       .slice(0, 2);
 
     return availableBesas.map((besa) => {
