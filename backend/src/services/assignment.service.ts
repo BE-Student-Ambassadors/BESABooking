@@ -103,6 +103,7 @@ function isBesaAvailable(
   bookingDate: string,
   bookingTime: string,
   bookingEndTime?: string,
+  tourDurationMinutes?: number,
 ) {
   if (!bookingDate || !bookingTime) {
     return false;
@@ -128,14 +129,20 @@ function isBesaAvailable(
 
   const bookingEnd24 = parseTime12Hour(bookingEndTime);
   const startMinutes = toMinutes(bookingTime24);
-  const endMinutes = bookingEnd24 ? toMinutes(bookingEnd24) : startMinutes;
+  // The tour's real end: its own end time if it has one, otherwise start + the tour's length
+  const endMinutes = bookingEnd24
+    ? toMinutes(bookingEnd24)
+    : startMinutes + (tourDurationMinutes && tourDurationMinutes > 0 ? tourDurationMinutes : 0);
   // `adjustments` was the field name before tempUnavailability existed
   const unavailability = normalizeTempUnavailability(besa.tempUnavailability ?? besa.adjustments);
   if (isBlockedByUnavailability(unavailability, bookingDate, startMinutes, endMinutes)) {
     return false;
   }
 
-  return dayHours.timeSlots.some((slot) => bookingTime24 >= slot.start && bookingTime24 <= slot.end);
+  // The whole tour has to fit inside one availability block, not just start inside it
+  return dayHours.timeSlots.some(
+    (slot) => startMinutes >= toMinutes(slot.start) && endMinutes <= toMinutes(slot.end),
+  );
 }
 
 export const assignmentService = {
@@ -160,6 +167,14 @@ export const assignmentService = {
       return [];
     }
 
+    // Tour length in minutes, so a BESA is only picked if the whole tour fits in their hours
+    const tourInfo = (tourRecord ?? {}) as Record<string, unknown>;
+    const rawDuration = Number(tourInfo.duration);
+    const durationUnit = typeof tourInfo.durationUnit === "string" ? tourInfo.durationUnit.toLowerCase() : "minutes";
+    const tourDurationMinutes =
+      Number.isFinite(rawDuration) && rawDuration > 0
+        ? (durationUnit.startsWith("hour") ? rawDuration * 60 : rawDuration)
+        : undefined;
     const besas = await besasRepository.listActive();
     const randomTiebreaks = new Map<unknown, number>();
     const randomTiebreakFor = (entry: unknown) => {
@@ -186,6 +201,7 @@ export const assignmentService = {
           bookingDate,
           bookingTime,
           typeof booking.endTime === "string" ? booking.endTime : undefined,
+          tourDurationMinutes,
         );
       })
       .sort((left, right) => randomTiebreakFor(left) - randomTiebreakFor(right))
