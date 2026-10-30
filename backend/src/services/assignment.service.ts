@@ -1,5 +1,6 @@
 import { toursRepository } from "../repositories/tours.repository.js";
 import { besasRepository } from "../repositories/besas.repository.js";
+import { bookingsRepository } from "../repositories/bookings.repository.js";
 import {
   getEffectiveDayHours,
   isBlockedByUnavailability,
@@ -149,6 +150,62 @@ function isBesaAvailable(
   return dayHours.timeSlots.some((slot) => bookingTime24 >= slot.start && bookingTime24 <= slot.end);
 }
 
+// --- Load balancing ----------------------------------------------------
+// Count how many upcoming bookings each BESA is already assigned to, so the
+// least-loaded eligible BESAs are picked first. Ties are broken at random.
+
+function countUpcomingAssignments(bookings: Array<Record<string, unknown>>, fromDate: string) {
+  const counts = new Map<string, number>();
+  const bump = (key: string) => {
+    if (key) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  };
+
+  for (const booking of bookings) {
+    const date = normalizeDateKey(booking.date);
+    if (!date || date < fromDate) {
+      continue;
+    }
+
+    const assigned = Array.isArray(booking.besas) ? booking.besas : [];
+    for (const entry of assigned) {
+      if (typeof entry === "string") {
+        bump(entry.trim().toLowerCase());
+      } else if (entry && typeof entry === "object") {
+        const record = entry as { email?: unknown; name?: unknown };
+        if (typeof record.email === "string") {
+          bump(record.email.trim().toLowerCase());
+        }
+        if (typeof record.name === "string") {
+          bump(record.name.trim().toLowerCase());
+        }
+      }
+    }
+  }
+
+  return counts;
+}
+
+async function loadUpcomingCounts() {
+  try {
+    // Today's date in Pacific time, formatted YYYY-MM-DD
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const bookings = await bookingsRepository.list();
+    return countUpcomingAssignments(bookings as unknown as Array<Record<string, unknown>>, today);
+  } catch (error) {
+    // Never block a booking because load-balancing data couldn't be read.
+    console.error("[assignment] load-balance lookup failed:", error);
+    return new Map<string, number>();
+  }
+}
+
+function upcomingLoad(besa: Record<string, unknown>, counts: Map<string, number>) {
+  const email = typeof besa.email === "string" ? besa.email.trim().toLowerCase() : "";
+  const name = typeof besa.name === "string" ? besa.name.trim().toLowerCase() : "";
+  return Math.max(email ? (counts.get(email) ?? 0) : 0, name ? (counts.get(name) ?? 0) : 0);
+}
+
 export const assignmentService = {
   async assignBesas(payload: unknown, tour: unknown) {
     const booking = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
@@ -172,6 +229,16 @@ export const assignmentService = {
     }
 
     const besas = await besasRepository.listActive();
+    const upcomingCounts = await loadUpcomingCounts();
+    const randomTiebreaks = new Map<unknown, number>();
+    const randomTiebreakFor = (entry: unknown) => {
+      let value = randomTiebreaks.get(entry);
+      if (value === undefined) {
+        value = Math.random();
+        randomTiebreaks.set(entry, value);
+      }
+      return value;
+    };
     const availableBesas = besas
       .filter((entry) => {
         const besa = entry as Record<string, unknown>;
@@ -200,9 +267,13 @@ export const assignmentService = {
           return priorityDiff;
         }
 
-        const leftName = typeof leftBesa.name === "string" ? leftBesa.name : "";
-        const rightName = typeof rightBesa.name === "string" ? rightBesa.name : "";
-        return leftName.localeCompare(rightName);
+        const loadDiff =
+          upcomingLoad(leftBesa, upcomingCounts) - upcomingLoad(rightBesa, upcomingCounts);
+        if (loadDiff !== 0) {
+          return loadDiff;
+        }
+
+        return randomTiebreakFor(left) - randomTiebreakFor(right);
       })
       .slice(0, 2);
 
