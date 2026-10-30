@@ -172,6 +172,15 @@ export const assignmentService = {
     }
 
     const besas = await besasRepository.listActive();
+    const randomTiebreaks = new Map<unknown, number>();
+    const randomTiebreakFor = (entry: unknown) => {
+      let value = randomTiebreaks.get(entry);
+      if (value === undefined) {
+        value = Math.random();
+        randomTiebreaks.set(entry, value);
+      }
+      return value;
+    };
     const availableBesas = besas
       .filter((entry) => {
         const besa = entry as Record<string, unknown>;
@@ -200,9 +209,7 @@ export const assignmentService = {
           return priorityDiff;
         }
 
-        const leftName = typeof leftBesa.name === "string" ? leftBesa.name : "";
-        const rightName = typeof rightBesa.name === "string" ? rightBesa.name : "";
-        return leftName.localeCompare(rightName);
+        return randomTiebreakFor(left) - randomTiebreakFor(right);
       })
       .slice(0, 2);
 
