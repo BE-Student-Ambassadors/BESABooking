@@ -703,6 +703,18 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const findDateOverride = (dateStr: string, tour: Tour) =>
     tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
 
+  // "Apply to all tours" overrides that affect the selected tour on this date. A tour with its own
+  // override for the date that isn't a full-day block keeps its own hours/blocks instead.
+  const getAllTourOverrides = (dateStr: string, selectedTour: Tour) => {
+    const ownOverride = findDateOverride(dateStr, selectedTour);
+    if (ownOverride && !ownOverride.unavailable) return [];
+    return tours.flatMap((t) =>
+      (t.dateSpecificBlockDays || []).filter(
+        (d) => d.appliesToAllTours && isDateWithinOverride(dateStr, d.startDate, d.endDate)
+      )
+    );
+  };
+
   const getBookingTime = (booking: BookingRecord): string | undefined =>
     booking.startTime ?? booking.time;
 
@@ -734,15 +746,16 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
 
     if (selectedTour) {
       addBlockedRules(findDateOverride(dateStr, selectedTour));
-    }
-
-    tours.forEach((tour) => {
-      (tour.dateSpecificBlockDays || []).forEach((override) => {
-        if (override.appliesToAllTours && isDateWithinOverride(dateStr, override.startDate, override.endDate)) {
-          addBlockedRules(override);
-        }
+      getAllTourOverrides(dateStr, selectedTour).forEach(addBlockedRules);
+    } else {
+      tours.forEach((tour) => {
+        (tour.dateSpecificBlockDays || []).forEach((override) => {
+          if (override.appliesToAllTours && isDateWithinOverride(dateStr, override.startDate, override.endDate)) {
+            addBlockedRules(override);
+          }
+        });
       });
-    });
+    }
 
     return { blockedTimes, blockedRanges };
   };
@@ -925,11 +938,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
     }
 
     // Global holiday blocks (appliesToAllTours)
-    const globallyBlocked = tours.some((t) =>
-      (t.dateSpecificBlockDays || []).some(
-        (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateString, d.startDate, d.endDate)
-      )
-    );
+    const globallyBlocked = getAllTourOverrides(dateString, tour).some((d) => d.unavailable);
     if (globallyBlocked) {
       return { available: false, reason: "This date is blocked for all tours (holiday/closure)." };
     }
@@ -1514,11 +1523,7 @@ const renderSectionIndicator = () => {
       }
 
       // Block immediately if globally unavailable
-      const globallyBlocked = tours.some((t) =>
-        (t.dateSpecificBlockDays || []).some(
-          (d) => d.appliesToAllTours && d.unavailable && isDateWithinOverride(dateStr, d.startDate, d.endDate)
-        )
-      );
+      const globallyBlocked = getAllTourOverrides(dateStr, selectedTourData).some((d) => d.unavailable);
       if (globallyBlocked) return false;
 
       const now = new Date();
