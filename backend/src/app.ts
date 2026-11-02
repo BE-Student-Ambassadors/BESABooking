@@ -4,6 +4,10 @@ import { env } from "./config/env.js";
 import { errorMiddleware } from "./middleware/error.middleware.js";
 import { registerRoutes } from "./routes/index.js";
 
+// Tour dates/times are Pacific wall-clock times and are parsed with local-time Date APIs.
+// Vercel runs in UTC (and reserves the TZ env var), so pin it here for every entry point.
+process.env.TZ = "America/Los_Angeles";
+
 export function createApp() {
   const app = express();
 
