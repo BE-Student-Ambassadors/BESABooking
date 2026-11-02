@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  createDashboardBooking,
   deleteDashboardBooking,
   getBesaManagementData,
   getDashboardAssignments,
@@ -21,6 +22,7 @@ adminRouter.get("/besas", requireAdmin, getBesaManagementData);
 adminRouter.get("/office-hours", requireAdmin, getOfficeHoursData);
 adminRouter.get("/office-hours/calendars", requireAdmin, getOfficeHoursCalendars);
 adminRouter.put("/office-hours/calendars", requireAdmin, updateOfficeHoursCalendars);
+adminRouter.post("/bookings", requireAdmin, createDashboardBooking);
 adminRouter.post("/bookings/assignments", requireAdmin, getDashboardAssignments);
 adminRouter.post("/settings/password", requireAdmin, updateSettingsPassword);
 adminRouter.patch("/bookings/:bookingId", requireAdmin, updateDashboardBooking);

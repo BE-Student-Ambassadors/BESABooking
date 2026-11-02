@@ -34,6 +34,11 @@ export async function updateOfficeHoursCalendars(req: Request, res: Response) {
   res.json(data);
 }
 
+export async function createDashboardBooking(req: Request, res: Response) {
+  const created = await adminService.createDashboardBooking(req.body);
+  res.status(201).json(created);
+}
+
 export async function updateDashboardBooking(req: Request, res: Response) {
   const updated = await adminService.updateDashboardBooking(getRouteParam(req.params.bookingId), req.body);
   res.json(updated);

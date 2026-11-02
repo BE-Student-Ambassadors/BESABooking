@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { UserRole } from "../../../appTypes.d.ts";
-import { Calendar, Users, Trash2, X } from 'lucide-react';
+import { Calendar, Users, Trash2, X, Plus } from 'lucide-react';
 import api from '../../../api';
 
 type DashboardResponse = {
@@ -47,6 +47,8 @@ export default function DashboardView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assigningBesas, setAssigningBesas] = useState(false);
   const [editBooking, setEditBooking] = useState<BookingData | null>(null);
+  // True when the edit modal is making a new booking for someone instead of editing one
+  const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState<BookingData | null>(null);
   const [besaList, setBesaList] = useState<BesaData[]>([]);
   const [deleteBooking, setDeleteBooking] = useState<BookingData | null>(null);
@@ -239,8 +241,52 @@ export default function DashboardView() {
   };
 
   const handleEditClick = (booking: BookingData) => {
+    setIsCreating(false);
     setEditBooking(booking);
     setFormData({ ...booking, besas: normalizeBesaAssignments(booking.besas) });
+  };
+
+  const handleNewBookingClick = () => {
+    const emptyBooking: BookingData = {
+      bookingId: '',
+      tourId: '',
+      tourType: '',
+      date: '',
+      startTime: '',
+      time: '',
+      endTime: '',
+      attendees: 1,
+      maxAttendees: 1,
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      organization: '',
+      role: '',
+      interests: [],
+      notes: '',
+      besas: [],
+    };
+    setIsCreating(true);
+    setEditBooking(emptyBooking);
+    setFormData(emptyBooking);
+  };
+
+  const closeEditModal = () => {
+    setEditBooking(null);
+    setIsCreating(false);
+  };
+
+  const handleTourChange = async (tourId: string) => {
+    if (!formData) return;
+    const tour = tours.find(t => t.tourId === tourId);
+    if (!tour) return;
+    const updatedFormData = { ...formData, tourId: tour.tourId, tourType: tour.title };
+    setFormData(updatedFormData);
+    // Which BESAs fit depends on the tour (supported tours, tour length)
+    if (isCreating && updatedFormData.date && updatedFormData.time) {
+      setFormData(await requestBesaAssignments(updatedFormData));
+    }
   };
 
   const handleDeleteClick = (booking: BookingData) => {
@@ -266,6 +312,22 @@ export default function DashboardView() {
 
   const handleSave = async () => {
     if (!editBooking || !formData) return;
+    if (isCreating) {
+      try {
+        await api.post('/api/admin/bookings', {
+          ...formData,
+          besas: normalizeBesaAssignments(formData.besas),
+        });
+        closeEditModal();
+        await reloadBookings();
+        alert("Booking created successfully!");
+      } catch (error) {
+        console.error("Error creating booking:", error);
+        const message = (error as any)?.response?.data?.message || "Failed to create booking.";
+        alert(message);
+      }
+      return;
+    }
     try {
       const saveData = {
         ...formData,
@@ -273,7 +335,7 @@ export default function DashboardView() {
       };
       if (!formData.bookingId) throw new Error("Missing bookingId on formData");
       await api.patch(`/api/admin/bookings/${formData.bookingId}`, saveData);
-      setEditBooking(null);
+      closeEditModal();
       await reloadBookings();
       alert("Booking updated successfully!");
     } catch (error) {
@@ -369,8 +431,17 @@ export default function DashboardView() {
 
       {/* Recent Bookings (future only) */}
       <div className="bg-white rounded-xl shadow-sm border">
-        <div className="p-6 border-b">
+        <div className="p-6 border-b flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-gray-900">Recent Bookings</h2>
+          <button
+            type="button"
+            onClick={handleNewBookingClick}
+            disabled={loading}
+            className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+            New Booking
+          </button>
         </div>
         {/* Desktop table */}
         <div className="hidden md:block overflow-x-auto">
@@ -684,7 +755,13 @@ export default function DashboardView() {
       {editBooking && formData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl w-full max-w-lg max-h-[80vh] overflow-y-auto p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Booking</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-1">{isCreating ? 'New Booking' : 'Edit Booking'}</h3>
+            {isCreating && (
+              <p className="text-sm text-gray-500 mb-4">
+                Book a tour for someone else. Tour hours and notice rules aren't enforced here.
+              </p>
+            )}
+            {!isCreating && <div className="mb-3" />}
 
             {/* First Name */}
             <label className="block mb-2 font-medium">First Name</label>
@@ -744,10 +821,7 @@ export default function DashboardView() {
             <label className="block mb-2 font-medium">Tour</label>
             <select
               value={formData.tourId || ""}
-              onChange={(e) => {
-                const tour = tours.find(t => t.tourId === e.target.value);
-                if (tour) setFormData({ ...formData, tourId: tour.tourId, tourType: tour.title });
-              }}
+              onChange={(e) => void handleTourChange(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg mb-4">
               <option value="">Select a tour</option>
               {tours.map((tour) => (
@@ -905,16 +979,17 @@ export default function DashboardView() {
 
             <div className="flex justify-end gap-3 mt-4">
               <button
-                onClick={() => setEditBooking(null)}
+                onClick={closeEditModal}
                 className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                disabled={assigningBesas}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
-                Save
+                {isCreating ? 'Create Booking' : 'Save'}
               </button>
             </div>
           </div>

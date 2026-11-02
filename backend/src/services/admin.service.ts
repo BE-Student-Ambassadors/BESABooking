@@ -3,6 +3,7 @@ import { bookingsRepository } from "../repositories/bookings.repository.js";
 import { toursRepository } from "../repositories/tours.repository.js";
 import { assignmentService } from "./assignment.service.js";
 import { normalizeTempAdjustments, normalizeTempUnavailability } from "../utils/besaTempSchedule.js";
+import { AppError } from "../utils/errors.js";
 
 const dayMapping = {
   0: "sunday",
@@ -225,6 +226,22 @@ function sanitizeBookingUpdate(payload: unknown) {
   return sanitized;
 }
 
+// 600 -> "10:00 AM", the format the booking flow and calendar sync use.
+function toDisplayTime(totalMinutes: number) {
+  const hours24 = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  const meridiem = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = ((hours24 + 11) % 12) + 1;
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+}
+
+function getTourDurationMinutes(tour: Record<string, unknown>) {
+  const duration = Number(tour.duration);
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  const unit = typeof tour.durationUnit === "string" ? tour.durationUnit.toLowerCase() : "minutes";
+  return unit.startsWith("hour") ? duration * 60 : duration;
+}
+
 function getWeekBounds(baseDate = new Date()) {
   const startOfWeek = new Date(baseDate);
   startOfWeek.setHours(0, 0, 0, 0);
@@ -375,6 +392,55 @@ export const adminService = {
       besas,
       compiledSchedule: buildCompiledSchedule(besas),
     };
+  },
+
+  // A booking an admin makes for someone else. Unlike the public flow it isn't held to the
+  // tour's availability or notice rules, and the BESAs are whoever the admin picked.
+  async createDashboardBooking(payload: unknown) {
+    const booking = sanitizeBookingUpdate(payload);
+    const text = (field: string) => (typeof booking[field] === "string" ? (booking[field] as string).trim() : "");
+
+    const tourId = text("tourId");
+    const date = text("date");
+    const startTime = text("startTime") || text("time");
+    const missing = [
+      !tourId && "tour",
+      !date && "date",
+      !startTime && "time",
+      !text("firstName") && "first name",
+      !text("lastName") && "last name",
+      !text("email") && "email",
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      throw new AppError(`Missing ${missing.join(", ")}.`, 400);
+    }
+
+    const start24 = parseTime12Hour(startTime);
+    if (!start24) {
+      throw new AppError('Time must look like "10:00 AM".', 400);
+    }
+
+    const tour = (await toursRepository.getById(tourId)) as Record<string, unknown>;
+    const [hours, minutes] = start24.split(":").map(Number);
+    const startMinutes = (hours ?? 0) * 60 + (minutes ?? 0);
+    const formattedStart = toDisplayTime(startMinutes);
+
+    return bookingsRepository.create({
+      attendees: 1,
+      maxAttendees: 1,
+      interests: [],
+      ...booking,
+      tourId,
+      date,
+      time: formattedStart,
+      startTime: formattedStart,
+      endTime: toDisplayTime(startMinutes + getTourDurationMinutes(tour)),
+      tourType: typeof tour.title === "string" ? tour.title : "",
+      location: typeof tour.location === "string" ? tour.location : "Not specified",
+      besas: Array.isArray(booking.besas) ? booking.besas : [],
+      createdAt: new Date().toISOString(),
+      createdByAdmin: true,
+    });
   },
 
   async updateDashboardBooking(bookingId: string, payload: unknown) {
