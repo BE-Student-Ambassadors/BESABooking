@@ -68,6 +68,18 @@ function findDateOverride(dateStr: string, tour: Tour) {
   return tour.dateSpecificBlockDays?.find((override) => isDateInRange(dateStr, override.startDate, override.endDate));
 }
 
+// "Apply to all tours" overrides that affect the selected tour on this date. A tour with its own
+// override for the date that isn't a full-day block keeps its own hours/blocks instead.
+function getAllTourOverrides(dateStr: string, selectedTour: Tour, tours: Tour[]) {
+  const ownOverride = findDateOverride(dateStr, selectedTour);
+  if (ownOverride && !ownOverride.unavailable) return [];
+  return tours.flatMap((tour) =>
+    (tour.dateSpecificBlockDays || []).filter(
+      (override) => override.appliesToAllTours && isDateWithinOverride(dateStr, override.startDate, override.endDate),
+    ),
+  );
+}
+
 function getMatchingAvailabilityRange(dateStr: string, tour: Tour) {
   return normalizeAvailabilityRanges(tour).find((range) => isDateInRange(dateStr, range.startDate, range.endDate));
 }
@@ -141,13 +153,7 @@ function getBlockedSlotRules(dateStr: string, selectedTour: Tour, tours: Tour[])
 
   addBlockedRules(findDateOverride(dateStr, selectedTour));
 
-  tours.forEach((tour) => {
-    (tour.dateSpecificBlockDays || []).forEach((override) => {
-      if (override.appliesToAllTours && isDateWithinOverride(dateStr, override.startDate, override.endDate)) {
-        addBlockedRules(override);
-      }
-    });
-  });
+  getAllTourOverrides(dateStr, selectedTour, tours).forEach(addBlockedRules);
 
   return { blockedTimes, blockedRanges };
 }
@@ -216,14 +222,7 @@ function getDateAvailabilityReason(dateString: string, tour: Tour, tours: Tour[]
     return "Cannot book past dates";
   }
 
-  const globallyBlocked = tours.some((entry) =>
-    (entry.dateSpecificBlockDays || []).some(
-      (override) =>
-        override.appliesToAllTours &&
-        override.unavailable &&
-        isDateWithinOverride(dateString, override.startDate, override.endDate),
-    ),
-  );
+  const globallyBlocked = getAllTourOverrides(dateString, tour, tours).some((override) => override.unavailable);
   if (globallyBlocked) {
     return "This date is blocked for all tours (holiday/closure).";
   }
