@@ -783,7 +783,10 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
       {!dateOverride.unavailable && (
         <div>
           <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">Custom Time Slots</label>
+              <label className="block text-sm font-medium text-gray-700">
+                Custom Hours
+                <span className="block text-xs font-normal text-gray-500">Replaces this tour's normal hours for the day</span>
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -801,7 +804,7 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
             </div>
 
             {dateOverride.slots.length === 0 && (
-              <p className="text-gray-500 text-xs mb-2">No custom slots.</p>
+              <p className="text-gray-500 text-xs mb-2">No custom hours (normal hours apply).</p>
             )}
 
             <div className="space-y-2">
@@ -839,6 +842,77 @@ function TourFormPage({ onBack, editingTour }: { onBack: () => void; editingTour
                       newDateSpecific[index] = {
                         ...dateOverride,
                         slots: dateOverride.slots.filter((_, i) => i !== slotIndex)
+                      };
+                      updateTour({ dateSpecificBlockDays: newDateSpecific });
+                    }}
+                    className="text-red-600 hover:bg-red-50 p-1 rounded-lg"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between mt-4 mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Blocked Times
+                <span className="block text-xs font-normal text-gray-500">No bookings during these times</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                  newDateSpecific[index] = {
+                    ...dateOverride,
+                    blockedRanges: [...(dateOverride.blockedRanges || []), { start: '12:00', end: '13:00' }]
+                  };
+                  updateTour({ dateSpecificBlockDays: newDateSpecific });
+                }}
+                className="text-blue-600 hover:bg-blue-50 p-1 rounded-lg"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+
+            {(dateOverride.blockedRanges || []).length === 0 && (
+              <p className="text-gray-500 text-xs mb-2">No blocked times.</p>
+            )}
+
+            <div className="space-y-2">
+              {(dateOverride.blockedRanges || []).map((range, rangeIndex) => (
+                <div key={rangeIndex} className="flex items-center space-x-2">
+                  <input
+                    type="time"
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                    value={range.start}
+                    onChange={(e) => {
+                      const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                      const newRanges = [...(dateOverride.blockedRanges || [])];
+                      newRanges[rangeIndex] = { ...range, start: e.target.value };
+                      newDateSpecific[index] = { ...dateOverride, blockedRanges: newRanges };
+                      updateTour({ dateSpecificBlockDays: newDateSpecific });
+                    }}
+                  />
+                  <span className="text-gray-500 text-xs">to</span>
+                  <input
+                    type="time"
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded-lg text-sm"
+                    value={range.end}
+                    onChange={(e) => {
+                      const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                      const newRanges = [...(dateOverride.blockedRanges || [])];
+                      newRanges[rangeIndex] = { ...range, end: e.target.value };
+                      newDateSpecific[index] = { ...dateOverride, blockedRanges: newRanges };
+                      updateTour({ dateSpecificBlockDays: newDateSpecific });
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newDateSpecific = [...(tour.dateSpecificBlockDays || [])];
+                      newDateSpecific[index] = {
+                        ...dateOverride,
+                        blockedRanges: (dateOverride.blockedRanges || []).filter((_, i) => i !== rangeIndex)
                       };
                       updateTour({ dateSpecificBlockDays: newDateSpecific });
                     }}

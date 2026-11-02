@@ -132,6 +132,14 @@ function getTourFrequencyMinutes(tour: Tour) {
     : tour.frequency;
 }
 
+// The tour's Minimum Notice setting; tours saved without one keep the old 24 hours.
+function getMinNoticeMs(tour: Tour) {
+  const amount = Number(tour.minNotice);
+  if (!Number.isFinite(amount) || amount < 0) return 24 * 60 * 60 * 1000;
+  const unitHours = tour.minNoticeUnit === "weeks" ? 24 * 7 : tour.minNoticeUnit === "days" ? 24 : 1;
+  return amount * unitHours * 60 * 60 * 1000;
+}
+
 function getBlockedSlotRules(dateStr: string, selectedTour: Tour, tours: Tour[]) {
   const blockedTimes = new Set<number>();
   const blockedRanges: Array<{ start: number; end: number }> = [];
@@ -371,7 +379,7 @@ async function computeAvailabilityForDate(
   const coverageBesas = requiresCoverage ? await listCoverageBesas() : [];
   const toursById = new Map(tours.map((entry) => [entry.tourId, entry]));
   const durationMinutes = getTourDurationMinutes(tour);
-  const minimumStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const minimumStart = new Date(Date.now() + getMinNoticeMs(tour));
 
   const times = baseSlots.flatMap((time) => {
     const parsed = parseTime12Hour(time);
