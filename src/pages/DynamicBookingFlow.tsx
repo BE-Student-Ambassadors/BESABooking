@@ -703,6 +703,21 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
   const findDateOverride = (dateStr: string, tour: Tour) =>
     tour.dateSpecificBlockDays?.find((d) => isDateInRange(dateStr, d.startDate, d.endDate));
 
+  // The tour's Minimum Notice setting; tours saved without one keep the old 24 hours.
+  const getMinNoticeMs = (tour: Tour) => {
+    const amount = Number(tour.minNotice);
+    if (!Number.isFinite(amount) || amount < 0) return 24 * 60 * 60 * 1000;
+    const unitHours = tour.minNoticeUnit === 'weeks' ? 24 * 7 : tour.minNoticeUnit === 'days' ? 24 : 1;
+    return amount * unitHours * 60 * 60 * 1000;
+  };
+
+  // First calendar day that can still have a slot after the minimum notice.
+  const getMinNoticeDate = (tour: Tour) => {
+    const date = new Date(Date.now() + getMinNoticeMs(tour));
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
   // "Apply to all tours" overrides that affect the selected tour on this date. A tour with its own
   // override for the date that isn't a full-day block keeps its own hours/blocks instead.
   const getAllTourOverrides = (dateStr: string, selectedTour: Tour) => {
@@ -790,7 +805,7 @@ export const DynamicBookingForm: React.FC<DynamicBookingFormProps> = ({
       ? override.slots
       : matchingRange?.weeklyHours?.[dayName] || tour.weeklyHours?.[dayName] || [];
     const blockedRules = getBlockedSlotRules(dateStr, tour);
-    const minimumStart = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const minimumStart = new Date(Date.now() + getMinNoticeMs(tour));
 
     return hours.flatMap((slot) => generateTimeSlots(slot.start, slot.end, durationMinutes, frequencyMinutes))
       .filter((time) => {
@@ -1213,9 +1228,7 @@ const renderSectionIndicator = () => {
     const tourStart = toDateOnly(selected.startDate);
     const tourEnd = toDateOnly(selected.endDate);
 
-    let minNoticeDate = new Date(now);
-    minNoticeDate.setDate(minNoticeDate.getDate() + 1);
-    minNoticeDate.setHours(0, 0, 0, 0);
+    const minNoticeDate = getMinNoticeDate(selected);
 
     let rangeMinDate = null;
     let rangeMaxDate = null;
@@ -1448,10 +1461,7 @@ const renderSectionIndicator = () => {
       const tourStart = toDateOnly(selectedTourData.startDate);
       const tourEnd = toDateOnly(selectedTourData.endDate);
 
-      // Calculate 24-hour minimum from now
-      let minNoticeDate = new Date(now);
-      minNoticeDate.setDate(minNoticeDate.getDate() + 1);
-      minNoticeDate.setHours(0, 0, 0, 0);
+      const minNoticeDate = getMinNoticeDate(selectedTourData);
 
       // Get range coverage from availabilityRanges first, then legacy dateSpecificDays
       let rangeMinDate = null;
@@ -1526,9 +1536,7 @@ const renderSectionIndicator = () => {
       const globallyBlocked = getAllTourOverrides(dateStr, selectedTourData).some((d) => d.unavailable);
       if (globallyBlocked) return false;
 
-      const now = new Date();
-      const minDateTime = new Date(now);
-      minDateTime.setHours(minDateTime.getHours() + 24);
+      const minDateTime = new Date(Date.now() + getMinNoticeMs(selectedTourData));
 
       // Get duration and frequency
       const durationMins =
