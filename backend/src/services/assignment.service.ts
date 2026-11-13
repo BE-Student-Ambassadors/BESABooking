@@ -145,6 +145,20 @@ function isBesaAvailable(
   );
 }
 
+// Regular tours need 1 BESA; large-group tours (10+ attendees) need 2.
+function besasNeededForTour(tourInfo: Record<string, unknown>, booking: Record<string, unknown>) {
+  const names = [tourInfo.title, tourInfo.name, tourInfo.tourType, tourInfo.tourName, booking.tourType]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+  const attendees = Number(booking.maxAttendees);
+  const isLarge =
+    names.includes("large") ||
+    tourInfo.largeTourDetailsEnabled === true ||
+    (Number.isFinite(attendees) && attendees >= 10);
+  return isLarge ? 2 : 1;
+}
+
 export const assignmentService = {
   async assignBesas(payload: unknown, tour: unknown) {
     const booking = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
@@ -205,7 +219,7 @@ export const assignmentService = {
         );
       })
       .sort((left, right) => randomTiebreakFor(left) - randomTiebreakFor(right))
-      .slice(0, 2);
+      .slice(0, besasNeededForTour(tourInfo, booking));
 
     return availableBesas.map((besa) => {
       const record = besa as Record<string, unknown>;
